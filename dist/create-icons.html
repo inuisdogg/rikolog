@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Icon Generator</title>
+</head>
+<body>
+  <canvas id="canvas" width="512" height="512" style="display:none;"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 背景（黒）
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, 512, 512);
+    
+    // 電卓の本体
+    ctx.fillStyle = '#2a2a2a';
+    ctx.fillRect(60, 60, 392, 432);
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(60, 60, 392, 432);
+    
+    // ディスプレイ
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(100, 100, 312, 80);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('0', 256, 160);
+    
+    // ボタン（数字）
+    ctx.fillStyle = '#333333';
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) {
+        ctx.beginPath();
+        ctx.arc(140 + col * 80, 220 + row * 80, 25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // 演算子ボタン（オレンジ）
+    ctx.fillStyle = '#ff9500';
+    for (let row = 0; row < 3; row++) {
+      ctx.beginPath();
+      ctx.arc(380, 220 + row * 80, 25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // 0ボタン
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(120, 420, 120, 50);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px Arial';
+    ctx.fillText('0', 180, 450);
+    
+    // =ボタン
+    ctx.fillStyle = '#ff9500';
+    ctx.beginPath();
+    ctx.arc(380, 445, 25, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 画像をダウンロード
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'icon-512.png';
+      a.click();
+      
+      // 192x192も作成
+      const canvas192 = document.createElement('canvas');
+      canvas192.width = 192;
+      canvas192.height = 192;
+      const ctx192 = canvas192.getContext('2d');
+      ctx192.drawImage(canvas, 0, 0, 192, 192);
+      canvas192.toBlob((blob192) => {
+        const url192 = URL.createObjectURL(blob192);
+        const a192 = document.createElement('a');
+        a192.href = url192;
+        a192.download = 'icon-192.png';
+        a192.click();
+        alert('アイコン画像をダウンロードしました。publicフォルダに配置してください。');
+      });
+    }, 'image/png');
+  </script>
+</body>
+</html>
+
+
+
+

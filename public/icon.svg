@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#000000">
+  <!-- 電卓のアイコン（シンプルなデザイン） -->
+  <rect x="80" y="60" width="352" height="392" rx="20" fill="#1a1a1a" stroke="#333" stroke-width="8"/>
+  <!-- ディスプレイ -->
+  <rect x="100" y="80" width="312" height="80" rx="8" fill="#000000"/>
+  <text x="256" y="140" font-family="Arial, sans-serif" font-size="48" fill="#ffffff" text-anchor="middle" font-weight="bold">0</text>
+  <!-- ボタン -->
+  <circle cx="140" cy="200" r="25" fill="#333333"/>
+  <circle cx="220" cy="200" r="25" fill="#333333"/>
+  <circle cx="300" cy="200" r="25" fill="#333333"/>
+  <circle cx="380" cy="200" r="25" fill="#ff9500"/>
+  <circle cx="140" cy="280" r="25" fill="#333333"/>
+  <circle cx="220" cy="280" r="25" fill="#333333"/>
+  <circle cx="300" cy="280" r="25" fill="#333333"/>
+  <circle cx="380" cy="280" r="25" fill="#ff9500"/>
+  <circle cx="140" cy="360" r="25" fill="#333333"/>
+  <circle cx="220" cy="360" r="25" fill="#333333"/>
+  <circle cx="300" cy="360" r="25" fill="#333333"/>
+  <circle cx="380" cy="360" r="25" fill="#ff9500"/>
+  <rect x="120" y="400" width="120" height="50" rx="25" fill="#333333"/>
+  <circle cx="300" cy="425" r="25" fill="#333333"/>
+  <circle cx="380" cy="425" r="25" fill="#ff9500"/>
+</svg>
+
+
+
+
+
+
+
