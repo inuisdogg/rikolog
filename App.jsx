@@ -289,11 +289,11 @@ const CalculatorMode = ({ onUnlock }) => {
   ];
 
   return (
-    <div className="h-screen w-full flex flex-col bg-black text-white p-4 font-sans">
-      <div className="flex-1 flex items-end justify-end p-6 text-6xl font-light font-mono break-all">
+    <div className="h-screen w-full flex flex-col bg-black text-white p-4 font-sans lg:max-w-md lg:h-auto lg:min-h-[600px] lg:mx-auto lg:shadow-2xl lg:rounded-xl lg:my-8">
+      <div className="flex-1 flex items-end justify-end p-6 text-6xl font-light font-mono break-all lg:min-h-[200px]">
         {display}
       </div>
-      <div className="grid grid-cols-4 gap-4 h-3/5 pb-8">
+      <div className="grid grid-cols-4 gap-4 h-3/5 pb-8 lg:h-auto lg:min-h-[400px]">
         {buttons.map((btn, i) => (
           <button 
             key={i}
@@ -372,7 +372,7 @@ const AuthScreen = ({ onLogin }) => {
         <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2">事実を記録し、あなたを守る。</p>
       </div>
 
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg space-y-3 sm:space-y-4 max-w-md mx-auto w-full">
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg space-y-3 sm:space-y-4 max-w-md lg:max-w-lg mx-auto w-full">
         <h2 className="text-base sm:text-lg font-bold text-center mb-3 sm:mb-4 text-slate-800">{isRegister ? "アカウント作成" : "ログイン"}</h2>
         
           {!isRegister && (
@@ -783,6 +783,22 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
   const isPaymentGate = step === questions.length + 2;
   const isResult = step === questions.length + 3;
 
+  const handleBack = () => {
+    if (step === 0) {
+      // イントロ画面の場合は元の画面に戻る
+      onClose();
+    } else if (step > 0 && step <= questions.length) {
+      // 質問中の場合は一つ前の質問に戻る
+      setStep(step - 1);
+    } else if (isPaymentGate) {
+      // 支払いゲート画面の場合はローディング画面に戻る（実際には質問の最後に戻る）
+      setStep(questions.length + 1);
+    } else if (isResult) {
+      // 結果画面の場合は支払いゲート画面に戻る
+      setStep(questions.length + 2);
+    }
+  };
+
   return (
     <div className="p-4 pb-24">
       <div className="flex items-center justify-between mb-3">
@@ -790,7 +806,7 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
           <Sparkles size={18} className="text-pink-500" /> AI慰謝料診断
         </div>
           <button
-          onClick={onClose}
+          onClick={handleBack}
           className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1"
           >
           <ArrowLeft size={14} /> 戻る
@@ -1326,7 +1342,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
       {isDisguiseModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setIsDisguiseModalOpen(false)} />
-          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+          <div className="relative w-full sm:max-w-lg lg:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
             <div className="p-4 border-b flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold text-slate-900">偽装アイコン/名称を選択</div>
@@ -1555,7 +1571,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
       {showTargetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowTargetModal(false)} />
-          <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+          <div className="relative w-full max-w-sm lg:max-w-xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
             <div className="p-5 border-b bg-gradient-to-r from-pink-50 to-purple-50">
         <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -4120,7 +4136,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
   if (error) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md lg:max-w-lg w-full text-center">
           <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
           <p className="text-sm text-gray-600 mb-4">{error}</p>
@@ -4139,7 +4155,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
   }
 
     return (
-      <div className="h-full w-full flex flex-col bg-slate-50 relative overflow-hidden font-sans text-slate-900" style={{ minHeight: '100dvh' }}>
+      <div className="h-full w-full flex flex-col bg-slate-50 relative overflow-hidden font-sans text-slate-900 lg:max-w-6xl lg:mx-auto lg:shadow-xl lg:px-4" style={{ minHeight: '100dvh' }}>
       <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
         <button onClick={() => setView('dashboard')} className="font-bold text-lg tracking-wider flex items-center gap-2 hover:opacity-80 transition-opacity">
           <ShieldAlert size={20} className="text-pink-500" />
@@ -4237,7 +4253,7 @@ export default function App() {
   if (error) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md lg:max-w-lg w-full text-center">
           <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
           <p className="text-sm text-gray-600 mb-4">{error}</p>
@@ -4271,7 +4287,7 @@ export default function App() {
     console.error("アプリのレンダリングエラー:", error);
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md lg:max-w-lg w-full text-center">
           <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
           <p className="text-sm text-gray-600 mb-4">アプリの読み込み中にエラーが発生しました: {error.message}</p>
