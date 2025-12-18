@@ -10,6 +10,10 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: false,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
   },
   publicDir: 'public',
+  assetsInclude: ['**/*.TTF', '**/*.ttf'],
 });

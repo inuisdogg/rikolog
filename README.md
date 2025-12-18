@@ -130,10 +130,54 @@ Log: { id, date, time, category, location, content, attachments: [{type, name}] 
 
 6. 今後の開発ロードマップ
 
-Firebase連携: 認証とFirestoreへのデータ保存の実装。
+Supabase連携: 認証とPostgreSQLへのデータ保存の実装。 ✅ **実装中**
 
-メディアアップロード: 実際に画像や音声をCloud Storageへ保存する機能。
+メディアアップロード: 実際に画像や音声をSupabase Storageへ保存する機能。
 
 PDF生成: jspdf 等を用いて実際にPDFファイルをダウンロード可能にする。
 
 PWA化: ホーム画面に追加してネイティブアプリのように振る舞わせる設定。
+
+---
+
+## 7. Supabaseデータベースのセットアップ
+
+実用に耐えるデータベースとして、Supabase（PostgreSQL）への移行を進めています。
+
+### 必要な準備
+
+1. **Supabaseプロジェクトの作成**
+   - [Supabase Dashboard](https://app.supabase.com/)でプロジェクトを作成
+   - 詳細は `SETUP_SUPABASE.md` を参照
+
+2. **環境変数の設定**
+   - プロジェクトルートに `.env` ファイルを作成
+   - Supabase設定値を記入（`SETUP_SUPABASE.md`を参照）
+
+3. **パッケージのインストール**
+   ```bash
+   npm install
+   ```
+
+4. **データベース設計の確認**
+   - `DATABASE_DESIGN.md` でデータ構造を確認
+
+### 実装状況
+
+- ✅ データベース設計書の作成（PostgreSQLテーブル設計）
+- ✅ Supabase設定ファイル (`supabase.config.js`)
+- ✅ データアクセス層の実装 (`db/` ディレクトリ)
+  - ✅ ユーザー情報 (`db/users.js`)
+  - ✅ ログ (`db/logs.js`)
+  - ✅ プレミアム情報 (`db/premium.js`)
+  - ✅ 掲示板 (`db/board.js`)
+  - ✅ メッセージ (`db/messages.js`)
+- ⏳ アプリケーションコードとの統合（次のステップ）
+
+### 次のステップ
+
+1. Supabaseプロジェクトのセットアップ（`SETUP_SUPABASE.md`を参照）
+2. SQLの実行（テーブル作成）
+3. 環境変数の設定
+4. App.jsxのlocalStorage呼び出しをSupabase呼び出しに置き換え
+5. 認証フローの実装

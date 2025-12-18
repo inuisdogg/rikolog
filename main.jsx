@@ -111,6 +111,83 @@ if ('serviceWorker' in navigator) {
 }
 
 // ============================================================================
+// フォント読み込み確認（デバッグ用）
+// ============================================================================
+if (document.fonts && document.fonts.check) {
+  // フォントを明示的に読み込む（実際のフォント名を使用）
+  const fontFace = new FontFace('AKACHANalphabet', 'url(/fonts/AKACHANa.TTF)');
+  
+  fontFace.load().then((loadedFont) => {
+    document.fonts.add(loadedFont);
+    console.log('✅ フォントを手動で読み込みました:', loadedFont.family);
+    
+    // フォントが読み込まれたか確認（実際のフォント名で確認）
+    // 注意: check()はフォントが利用可能かどうかを確認するが、実際の適用はCSSに依存
+    const isLoaded = document.fonts.check('16px AKACHANalphabet');
+    console.log('AKACHANフォント読み込み状態:', isLoaded ? '✅ 読み込み済み' : '⚠️ check()はfalseですが、フォントは読み込まれています');
+    
+    // 実際に要素に適用されているか確認
+    setTimeout(() => {
+      const testElement = document.createElement('span');
+      testElement.style.fontFamily = 'AKACHANalphabet, sans-serif';
+      testElement.style.fontSize = '16px';
+      testElement.textContent = 'リコログ';
+      document.body.appendChild(testElement);
+      
+      const computedStyle = window.getComputedStyle(testElement);
+      const appliedFont = computedStyle.fontFamily;
+      console.log('適用されたフォント:', appliedFont);
+      
+      // フォントが適用されているか確認
+      if (appliedFont.includes('AKACHANalphabet')) {
+        console.log('✅ フォントが正しく適用されています！');
+      } else {
+        console.warn('⚠️ フォントが適用されていません。CSSを確認してください。');
+      }
+      
+      document.body.removeChild(testElement);
+    }, 500);
+  }).catch((err) => {
+    console.error('❌ フォントの読み込みに失敗:', err);
+    console.error('エラー詳細:', err.message);
+    
+    // フォントファイルの存在確認
+    fetch('/fonts/AKACHANa.TTF')
+      .then(res => {
+        if (res.ok) {
+          console.log('✅ フォントファイルは存在します:', res.status);
+          console.log('Content-Type:', res.headers.get('content-type'));
+          return res.blob();
+        } else {
+          console.error('❌ フォントファイルが見つかりません:', res.status);
+        }
+      })
+      .then(blob => {
+        if (blob) {
+          console.log('フォントファイルサイズ:', blob.size, 'bytes');
+          console.log('フォントファイルタイプ:', blob.type);
+        }
+      })
+      .catch(err => console.error('❌ フォントファイルの取得に失敗:', err));
+  });
+  
+  // フォントが読み込まれるまで待つ（フォールバック）
+  document.fonts.ready.then(() => {
+    setTimeout(() => {
+      // CSSの@font-faceで定義されたフォントを確認
+      const isLoaded = document.fonts.check('16px AKACHANalphabet');
+      if (isLoaded) {
+        console.log('✅ CSSの@font-faceで定義されたフォントが利用可能です: AKACHANalphabet');
+      } else {
+        // フォントは手動で読み込まれているので、CSSの定義は問題ない可能性が高い
+        console.log('ℹ️ document.fonts.check()はfalseですが、フォントは手動で読み込まれています。');
+        console.log('実際の表示を確認してください。フォントが表示されていれば問題ありません。');
+      }
+    }, 1000);
+  });
+}
+
+// ============================================================================
 // React アプリケーションのレンダリング
 // ============================================================================
 

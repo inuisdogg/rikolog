@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'AKACHANalphabet';
+  src: url('/fonts/AKACHANa.TTF') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  /* フォントの読み込みを確実にする */
+  unicode-range: U+0020-007F, U+3040-309F, U+30A0-30FF, U+4E00-9FAF;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -63,4 +73,17 @@ html, body {
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-in;
+}
+
+.font-akachan {
+  font-family: 'AKACHANalphabet', 'AKACHAN', sans-serif !important;
+}
+
+/* フォントが確実に適用されるように */
+h1.font-akachan,
+button.font-akachan,
+.font-akachan {
+  font-family: 'AKACHANalphabet', 'AKACHAN', sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PDFDownloadLink, BlobProvider } from '@react-pdf/renderer';
 import { StatementDocument } from './StatementPDF.jsx';
 import { buildStatementDataFromLogs } from './statementTransform.js';
+import { supabase } from './supabase.config.js';
+import { getUser, createUser, getCurrentUser } from './db/users.js';
+import { getUserLogs, createLog, updateLog as updateLogInDB } from './db/logs.js';
+import { isPremiumUser, getPremiumSubscription } from './db/premium.js';
 import { 
   ShieldAlert, 
   Plus, 
@@ -221,16 +225,22 @@ function isStandaloneMode() {
 }
 
 // --- プレミアムプランチェック ---
-function checkPremiumStatus() {
+// プレミアム状態をチェック（非同期版）
+async function checkPremiumStatusAsync(userId) {
+  if (!userId) return false;
   try {
-    const premium = localStorage.getItem('riko_premium');
-    if (!premium) return false;
-    const data = JSON.parse(premium);
-    if (!data.expiresAt || data.status !== 'active') return false;
-    return new Date(data.expiresAt) > new Date();
+    return await isPremiumUser(userId);
   } catch {
     return false;
   }
+}
+
+// プレミアム状態をチェック（同期版 - 既存コードとの互換性のため）
+// 注意: この関数は後方互換性のため残していますが、実際のチェックは非同期で行う必要があります
+function checkPremiumStatus() {
+  // この関数は後方互換性のため残していますが、実際のチェックは非同期で行う必要があります
+  // 使用箇所を非同期版に置き換えることを推奨
+  return false; // デフォルトは無料プラン
 }
 
 // プラン管理ユーティリティ
@@ -240,7 +250,7 @@ const PLAN_TYPES = {
 };
 
 function getUserPlan() {
-  return checkPremiumStatus() ? PLAN_TYPES.PREMIUM : PLAN_TYPES.FREE;
+  return PLAN_TYPES.FREE; // デフォルトは無料プラン（非同期版を使用することを推奨）
 }
 
 // 無料プランの制限
@@ -315,7 +325,9 @@ const CalculatorMode = ({ onUnlock }) => {
 // --- 2. 認証 & プロフィール登録画面 ---
 const AuthScreen = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
-  const [isBiometricLoading, setIsBiometricLoading] = useState(false); 
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -324,42 +336,100 @@ const AuthScreen = ({ onLogin }) => {
     situation: ""
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     try {
       if (!formData.email || !formData.password) {
-        alert("メールアドレスとパスワードを入力してください（デモ用のため任意の値で構いません）");
+        setError("メールアドレスとパスワードを入力してください");
         return;
       }
-    
-      const userProfile = {
-        ...formData,
-        id: "user_" + Math.random().toString(36).substr(2, 9),
-        registeredAt: new Date().toISOString()
-      };
-      
-      console.log("ユーザープロフィールを保存中:", userProfile);
-      localStorage.setItem("riko_user", JSON.stringify(userProfile));
-      console.log("localStorageに保存完了");
-      console.log("onLoginを呼び出し中...");
-      onLogin(userProfile);
-      console.log("onLogin呼び出し完了");
+
+      if (formData.password.length < 6) {
+        setError("パスワードは6文字以上で入力してください");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      if (isRegister) {
+        // 新規登録
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (authError) throw authError;
+
+        if (!authData.user) {
+          throw new Error("ユーザー作成に失敗しました");
+        }
+
+        // ユーザー情報をusersテーブルに保存
+        await createUser(authData.user.id, {
+          email: formData.email,
+          reason: formData.reason,
+          targetDate: formData.targetDate || null,
+          situation: formData.situation || "",
+        });
+
+        // ユーザー情報を取得
+        const userProfile = await getUser(authData.user.id);
+        if (userProfile) {
+          onLogin({ ...userProfile, id: authData.user.id });
+        } else {
+          throw new Error("ユーザー情報の取得に失敗しました");
+        }
+      } else {
+        // ログイン
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (authError) throw authError;
+
+        if (!authData.user) {
+          throw new Error("ログインに失敗しました");
+        }
+
+        // ユーザー情報を取得
+        const userProfile = await getUser(authData.user.id);
+        if (userProfile) {
+          onLogin({ ...userProfile, id: authData.user.id });
+        } else {
+          throw new Error("ユーザー情報が見つかりません");
+        }
+      }
     } catch (error) {
-      console.error("ログイン処理でエラーが発生しました:", error);
-      alert("ログイン処理中にエラーが発生しました。もう一度お試しください。");
+      console.error("認証エラー:", error);
+      setError(error.message || "認証処理中にエラーが発生しました。もう一度お試しください。");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleBiometricLogin = () => {
+  const handleBiometricLogin = async () => {
     setIsBiometricLoading(true);
-    setTimeout(() => {
-      setIsBiometricLoading(false);
-        const savedUser = localStorage.getItem("riko_user");
-        if (savedUser) {
-        onLogin(JSON.parse(savedUser));
+    setError(null);
+    try {
+      // セッションを確認
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const userProfile = await getCurrentUser();
+        if (userProfile) {
+          onLogin({ ...userProfile, id: session.user.id });
         } else {
-        alert("アカウントが見つかりません。まずはフォームからログイン（新規登録）してください。");
+          setError("ユーザー情報が見つかりません");
+        }
+      } else {
+        setError("セッションが見つかりません。まずはフォームからログインしてください。");
       }
-    }, 1500);
+    } catch (error) {
+      console.error("セッション復元エラー:", error);
+      setError("セッションの復元に失敗しました");
+    } finally {
+      setIsBiometricLoading(false);
+    }
   };
 
   return (
@@ -375,10 +445,22 @@ const AuthScreen = ({ onLogin }) => {
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg space-y-3 sm:space-y-4 max-w-md lg:max-w-lg mx-auto w-full">
         <h2 className="text-base sm:text-lg font-bold text-center mb-3 sm:mb-4 text-slate-800">{isRegister ? "アカウント作成" : "ログイン"}</h2>
         
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs">
+            {error}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg text-xs text-center">
+            処理中...
+          </div>
+        )}
+        
           {!isRegister && (
           <div className="bg-slate-50 p-2 sm:p-3 rounded text-[10px] sm:text-xs text-slate-600 mb-3 sm:mb-4 border border-slate-200">
-              <strong>デモ用アカウント:</strong><br/>
-              ID: demo@example.com / Pass: 1234
+              <strong>ヒント:</strong><br/>
+              パスワードは6文字以上で入力してください
             </div>
           )}
 
@@ -449,9 +531,10 @@ const AuthScreen = ({ onLogin }) => {
 
           <button 
             onClick={handleSubmit}
-          className="w-full bg-pink-600 text-white font-bold py-2 sm:py-3 rounded shadow-lg hover:bg-pink-700 transition mt-3 sm:mt-4 text-xs sm:text-sm"
+            disabled={isLoading}
+          className="w-full bg-pink-600 text-white font-bold py-2 sm:py-3 rounded shadow-lg hover:bg-pink-700 transition mt-3 sm:mt-4 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isRegister ? "利用を開始する" : "ログイン"}
+            {isLoading ? "処理中..." : (isRegister ? "利用を開始する" : "ログイン")}
           </button>
 
           <button 
@@ -4093,34 +4176,95 @@ const MainApp = ({ onLock, user, onLogout }) => {
   const [view, setView] = useState("dashboard"); // dashboard, timeline, add, messages, board, export, safety, lifeSupport, premium
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
   const [selectedLogIndex, setSelectedLogIndex] = useState(null);
 
+  // ログデータの読み込み
   useEffect(() => {
-    try {
-    const loaded = loadLocalStorageJSON("riko_logs", { expected: 'array', fallback: [] });
-    setLogs(loaded.value);
-    } catch (err) {
-      console.error("ログの読み込みエラー:", err);
-      setError("ログの読み込みに失敗しました");
-      setLogs([]);
-    }
-  }, []);
+    const loadLogs = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setIsLoading(true);
+        const userLogs = await getUserLogs(user.id);
+        // データ構造を変換（SupabaseからlocalStorage形式に）
+        const convertedLogs = userLogs.map(log => ({
+          id: log.id,
+          date: log.date,
+          time: log.time,
+          category: log.category,
+          location: log.location,
+          content: log.content,
+          attachments: log.attachments || [],
+          medical: log.medical || null,
+          comments: log.comments || [],
+        }));
+        setLogs(convertedLogs);
+        setError(null);
+      } catch (err) {
+        console.error("ログの読み込みエラー:", err);
+        setError("ログの読み込みに失敗しました");
+        setLogs([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const addLog = (newLog) => {
-    const updatedLogs = [newLog, ...logs];
-    setLogs(updatedLogs);
-      localStorage.setItem("riko_logs", JSON.stringify(updatedLogs));
+    loadLogs();
+  }, [user?.id]);
+
+  const addLog = async (newLog) => {
+    if (!user?.id) return;
+    
+    try {
+      // Supabaseに保存
+      const logId = await createLog(user.id, {
+        date: newLog.date,
+        time: newLog.time,
+        category: newLog.category,
+        location: newLog.location,
+        content: newLog.content,
+        attachments: newLog.attachments || [],
+        medical: newLog.medical || null,
+        comments: [],
+      });
+
+      // ローカル状態を更新
+      const updatedLogs = [{ ...newLog, id: logId }, ...logs];
+      setLogs(updatedLogs);
       setView("timeline");
+    } catch (err) {
+      console.error("ログの保存エラー:", err);
+      alert("ログの保存に失敗しました。もう一度お試しください。");
+    }
   };
 
-  const updateLog = (updatedLog) => {
-    if (selectedLogIndex === null) return;
-    const updatedLogs = [...logs];
-    updatedLogs[selectedLogIndex] = updatedLog;
-    setLogs(updatedLogs);
-    localStorage.setItem("riko_logs", JSON.stringify(updatedLogs));
-    setSelectedLog(updatedLog);
+  const updateLog = async (updatedLog) => {
+    if (selectedLogIndex === null || !updatedLog.id) return;
+    
+    try {
+      // Supabaseを更新
+      await updateLogInDB(updatedLog.id, {
+        date: updatedLog.date,
+        time: updatedLog.time,
+        category: updatedLog.category,
+        location: updatedLog.location,
+        content: updatedLog.content,
+        attachments: updatedLog.attachments || [],
+        medical: updatedLog.medical || null,
+        comments: updatedLog.comments || [],
+      });
+
+      // ローカル状態を更新
+      const updatedLogs = [...logs];
+      updatedLogs[selectedLogIndex] = updatedLog;
+      setLogs(updatedLogs);
+      setSelectedLog(updatedLog);
+    } catch (err) {
+      console.error("ログの更新エラー:", err);
+      alert("ログの更新に失敗しました。もう一度お試しください。");
+    }
   };
 
   const handleLogClick = (log, index) => {
@@ -4133,6 +4277,17 @@ const MainApp = ({ onLock, user, onLogout }) => {
     setSelectedLogIndex(null);
   };
 
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <ShieldAlert size={48} className="text-pink-500 mx-auto mb-4 animate-pulse" />
+          <p className="text-sm text-gray-600">データを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
@@ -4143,11 +4298,11 @@ const MainApp = ({ onLock, user, onLogout }) => {
           <button
             onClick={() => {
               setError(null);
-              setLogs([]);
+              window.location.reload();
             }}
             className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
           >
-            再試行
+            再読み込み
           </button>
         </div>
       </div>
@@ -4216,15 +4371,44 @@ export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // 認証状態の監視
   useEffect(() => {
-    try {
-      const loaded = loadLocalStorageJSON("riko_user", { expected: 'object', fallback: null });
-      if (loaded.value) setCurrentUser(loaded.value);
-    } catch (err) {
-      console.error("ユーザー情報の読み込みエラー:", err);
-      setError("ユーザー情報の読み込みに失敗しました");
-    }
+    // セッションを確認
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const userProfile = await getCurrentUser();
+          if (userProfile) {
+            setCurrentUser({ ...userProfile, id: session.user.id });
+          }
+        }
+      } catch (err) {
+        console.error("セッション確認エラー:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
+
+    // 認証状態の変更を監視
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const userProfile = await getCurrentUser();
+        if (userProfile) {
+          setCurrentUser({ ...userProfile, id: session.user.id });
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleLogin = (user) => {
@@ -4233,21 +4417,34 @@ export default function App() {
         console.error("ユーザー情報が正しく渡されていません");
         return;
       }
-      console.log("ログイン処理開始:", user);
       setCurrentUser(user);
       setError(null);
-      console.log("ログイン処理完了");
     } catch (error) {
       console.error("ログイン処理でエラーが発生しました:", error);
       setError("ログイン処理中にエラーが発生しました");
-      alert("ログイン処理中にエラーが発生しました。もう一度お試しください。");
     }
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem("riko_user");
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+    } catch (error) {
+      console.error("ログアウトエラー:", error);
+    }
   };
+
+  // ローディング中
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <ShieldAlert size={48} className="text-pink-500 mx-auto mb-4 animate-pulse" />
+          <p className="text-sm text-gray-600">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   // エラー表示
   if (error) {
@@ -4262,7 +4459,6 @@ export default function App() {
               setError(null);
               setCurrentUser(null);
               setIsUnlocked(false);
-              localStorage.removeItem("riko_user");
             }}
             className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
           >

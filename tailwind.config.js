@@ -6,10 +6,16 @@ export default {
     "./*.{js,jsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        'akachan': ['AKACHAN', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 }
+
+
 
 
 
