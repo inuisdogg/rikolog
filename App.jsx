@@ -2034,6 +2034,15 @@ const MessagesView = () => {
 
 // --- 掲示板（シンプル版） ---
 const BoardView = () => {
+  // カテゴリの定義
+  const categories = [
+    { id: 'question', label: '質問', color: 'bg-blue-100 text-blue-700' },
+    { id: 'consultation', label: '相談', color: 'bg-purple-100 text-purple-700' },
+    { id: 'information', label: '情報共有', color: 'bg-green-100 text-green-700' },
+    { id: 'experience', label: '体験談', color: 'bg-orange-100 text-orange-700' },
+    { id: 'other', label: 'その他', color: 'bg-gray-100 text-gray-700' },
+  ];
+
   const [posts, setPosts] = useState(() => {
     try {
       const raw = localStorage.getItem('riko_board_posts');
@@ -2042,6 +2051,7 @@ const BoardView = () => {
       return Array.isArray(parsed)
         ? parsed.map((p) => ({
             ...p,
+            category: p.category || 'other', // 既存の投稿にはデフォルトカテゴリを設定
             reactions: p.reactions || { like: 0, thumbsUp: 0 },
             replies: Array.isArray(p.replies) ? p.replies : [],
           }))
@@ -2051,10 +2061,12 @@ const BoardView = () => {
     }
   });
   const [showForm, setShowForm] = useState(false);
-  const [newPost, setNewPost] = useState({ title: '', content: '', author: '匿名' });
+  const [newPost, setNewPost] = useState({ title: '', content: '', author: '匿名', category: 'other' });
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [replyContent, setReplyContent] = useState('');
   const [replyAuthor, setReplyAuthor] = useState('匿名');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   const persist = (next) => {
     setPosts(next);
@@ -2072,6 +2084,7 @@ const BoardView = () => {
       title: newPost.title.trim(),
       content: newPost.content.trim(),
       author: (newPost.author || '匿名').trim() || '匿名',
+      category: newPost.category || 'other',
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: new Date().toISOString(),
@@ -2079,9 +2092,32 @@ const BoardView = () => {
       replies: [],
     };
     persist([post, ...posts]);
-    setNewPost({ title: '', content: '', author: '匿名' });
+    setNewPost({ title: '', content: '', author: '匿名', category: 'other' });
     setShowForm(false);
   };
+
+  // フィルタリングされた投稿を取得
+  const filteredPosts = useMemo(() => {
+    let filtered = posts;
+
+    // カテゴリでフィルタリング
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter((post) => post.category === selectedCategory);
+    }
+
+    // 検索クエリでフィルタリング
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (post) =>
+          post.title.toLowerCase().includes(query) ||
+          post.content.toLowerCase().includes(query) ||
+          post.author.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [posts, selectedCategory, searchQuery]);
 
   const handleReaction = (postId, key) => {
     const next = posts.map((p) =>
@@ -2123,6 +2159,61 @@ const BoardView = () => {
         </button>
       </div>
 
+      {/* 検索バー */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="タイトル、内容、投稿者名で検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border border-gray-200 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* カテゴリフィルター */}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Filter size={16} className="text-gray-500" />
+          <span className="text-xs font-bold text-gray-600">カテゴリ</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+              selectedCategory === 'all'
+                ? 'bg-slate-900 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            すべて
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                selectedCategory === cat.id
+                  ? cat.color + ' ring-2 ring-offset-2 ring-gray-300'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {showForm && (
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-4 space-y-2">
           <input
@@ -2138,6 +2229,20 @@ const BoardView = () => {
             onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
             className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-sm h-24"
           />
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">カテゴリ</label>
+            <select
+              value={newPost.category}
+              onChange={(e) => setNewPost({ ...newPost, category: e.target.value })}
+              className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-sm"
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <input
             type="text"
             placeholder="投稿者名（任意・匿名可）"
@@ -2152,20 +2257,35 @@ const BoardView = () => {
       )}
 
       <div className="space-y-3">
-        {posts.length === 0 ? (
+        {filteredPosts.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <MessageSquare size={48} className="mx-auto mb-2 opacity-20" />
-            <p>まだ投稿がありません。</p>
+            <p>
+              {posts.length === 0
+                ? 'まだ投稿がありません。'
+                : searchQuery || selectedCategory !== 'all'
+                ? '該当する投稿が見つかりませんでした。'
+                : 'まだ投稿がありません。'}
+            </p>
           </div>
         ) : (
-          posts.map((post) => (
-            <div key={post.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="font-bold text-slate-900">{post.title}</h3>
-                <span className="text-[10px] text-gray-400">{post.date} {post.time}</span>
-              </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{post.content}</p>
-              <div className="text-xs text-gray-500 mb-3">投稿者: {post.author}</div>
+          filteredPosts.map((post) => {
+            const categoryInfo = categories.find((cat) => cat.id === post.category) || categories[categories.length - 1];
+            return (
+              <div key={post.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${categoryInfo.color}`}>
+                        {categoryInfo.label}
+                      </span>
+                      <h3 className="font-bold text-slate-900">{post.title}</h3>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-gray-400 ml-2">{post.date} {post.time}</span>
+                </div>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{post.content}</p>
+                <div className="text-xs text-gray-500 mb-3">投稿者: {post.author}</div>
 
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-gray-100">
                 <button onClick={() => handleReaction(post.id, 'like')} className="flex items-center gap-1 text-gray-600 hover:text-pink-600 transition">
@@ -2229,8 +2349,9 @@ const BoardView = () => {
                   ))}
                 </div>
               ) : null}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
     </div>
