@@ -292,7 +292,11 @@ const AuthScreen = ({ onLogin }) => {
   });
 
   const handleSubmit = () => {
-    if (!formData.email || !formData.password) return alert("メールアドレスとパスワードを入力してください（デモ用のため任意の値で構いません）");
+    try {
+      if (!formData.email || !formData.password) {
+        alert("メールアドレスとパスワードを入力してください（デモ用のため任意の値で構いません）");
+        return;
+      }
     
       const userProfile = {
         ...formData,
@@ -302,6 +306,10 @@ const AuthScreen = ({ onLogin }) => {
       
       localStorage.setItem("riko_user", JSON.stringify(userProfile));
       onLogin(userProfile);
+    } catch (error) {
+      console.error("ログイン処理でエラーが発生しました:", error);
+      alert("ログイン処理中にエラーが発生しました。もう一度お試しください。");
+    }
   };
 
   const handleBiometricLogin = () => {
@@ -318,31 +326,31 @@ const AuthScreen = ({ onLogin }) => {
   };
 
   return (
-    <div className="h-screen bg-slate-50 p-6 flex flex-col justify-center overflow-y-auto">
-      <div className="text-center mb-8">
-        <div className="inline-block p-4 bg-slate-900 rounded-full mb-4 shadow-xl">
-          <ShieldAlert size={48} className="text-pink-500" />
+    <div className="h-screen bg-slate-50 p-4 sm:p-6 flex flex-col justify-center overflow-y-auto" style={{ transform: 'scale(0.85)', transformOrigin: 'center center' }}>
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="inline-block p-3 sm:p-4 bg-slate-900 rounded-full mb-3 sm:mb-4 shadow-xl">
+          <ShieldAlert size={40} className="text-pink-500 sm:w-12 sm:h-12" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-wider">Riko-Log</h1>
-        <p className="text-xs text-gray-500 mt-2">事実を記録し、あなたを守る。</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-wider">Riko-Log</h1>
+        <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2">事実を記録し、あなたを守る。</p>
       </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-lg space-y-4">
-        <h2 className="text-lg font-bold text-center mb-4 text-slate-800">{isRegister ? "アカウント作成" : "ログイン"}</h2>
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg space-y-3 sm:space-y-4 max-w-md mx-auto w-full">
+        <h2 className="text-base sm:text-lg font-bold text-center mb-3 sm:mb-4 text-slate-800">{isRegister ? "アカウント作成" : "ログイン"}</h2>
         
           {!isRegister && (
-          <div className="bg-slate-50 p-3 rounded text-xs text-slate-600 mb-4 border border-slate-200">
+          <div className="bg-slate-50 p-2 sm:p-3 rounded text-[10px] sm:text-xs text-slate-600 mb-3 sm:mb-4 border border-slate-200">
               <strong>デモ用アカウント:</strong><br/>
               ID: demo@example.com / Pass: 1234
             </div>
           )}
 
           {!isRegister && (
-          <div className="mb-6 pb-6 border-b border-gray-100">
+          <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-100">
               <button 
                 onClick={handleBiometricLogin}
                 disabled={isBiometricLoading}
-              className="w-full bg-slate-100 text-slate-700 font-bold py-3 rounded-lg border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-200 transition relative overflow-hidden"
+              className="w-full bg-slate-100 text-slate-700 font-bold py-2 sm:py-3 rounded-lg border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-200 transition relative overflow-hidden text-xs sm:text-sm"
               >
                 {isBiometricLoading ? (
                   <>
@@ -350,7 +358,7 @@ const AuthScreen = ({ onLogin }) => {
                   </>
                 ) : (
                   <>
-                  <ScanFace size={20} /> Face ID でログイン
+                  <ScanFace size={18} className="sm:w-5 sm:h-5" /> Face ID でログイン
                   </>
                 )}
               </button>
@@ -360,24 +368,24 @@ const AuthScreen = ({ onLogin }) => {
           <input 
             type="email" 
             placeholder="メールアドレス" 
-          className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-sm"
+          className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 rounded text-xs sm:text-sm"
             value={formData.email}
             onChange={e => setFormData({...formData, email: e.target.value})}
           />
           <input 
             type="password" 
             placeholder="パスワード" 
-          className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-sm"
+          className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 rounded text-xs sm:text-sm"
             value={formData.password}
             onChange={e => setFormData({...formData, password: e.target.value})}
           />
 
           {isRegister && (
-          <div className="space-y-4 pt-2 border-t border-gray-100 animate-fade-in">
+          <div className="space-y-3 sm:space-y-4 pt-2 border-t border-gray-100 animate-fade-in">
             <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">記録の主な目的（任意）</label>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">記録の主な目的（任意）</label>
                 <select 
-                className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-sm"
+                className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 rounded text-xs sm:text-sm"
                   value={formData.reason}
                   onChange={e => setFormData({...formData, reason: e.target.value})}
                 >
@@ -391,10 +399,10 @@ const AuthScreen = ({ onLogin }) => {
               </div>
 
             <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">解決目標時期（任意）</label>
+                <label className="block text-[10px] sm:text-xs font-bold text-gray-500 mb-1">解決目標時期（任意）</label>
                 <input 
                   type="date" 
-                className="w-full bg-gray-50 border border-gray-200 p-3 rounded text-sm"
+                className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 rounded text-xs sm:text-sm"
                   value={formData.targetDate}
                   onChange={e => setFormData({...formData, targetDate: e.target.value})}
                 />
@@ -404,7 +412,7 @@ const AuthScreen = ({ onLogin }) => {
 
           <button 
             onClick={handleSubmit}
-          className="w-full bg-pink-600 text-white font-bold py-3 rounded shadow-lg hover:bg-pink-700 transition mt-4"
+          className="w-full bg-pink-600 text-white font-bold py-2 sm:py-3 rounded shadow-lg hover:bg-pink-700 transition mt-3 sm:mt-4 text-xs sm:text-sm"
           >
             {isRegister ? "利用を開始する" : "ログイン"}
           </button>
@@ -928,32 +936,189 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
 
 // --- 4. ダッシュボード（データ管理・自衛） ---
 const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, onShowPremium }) => {
-  // 記録の充実度を計算（0-100%）
-  const calculateCompleteness = () => {
-    let score = 0;
-    logs.forEach(log => {
-      score += 5; 
-      if (log.attachments) {
-        log.attachments.forEach(att => {
-          if (att.type === 'audio') score += 15;
-          if (att.type === 'video') score += 20;
-          if (att.type === 'image') score += 10;
-        });
-      }
-    });
-    return Math.min(score, 100);
+  // 目標件数の管理
+  const [targetCount, setTargetCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('riko_target_count');
+      return saved ? parseInt(saved, 10) : null; // 未設定の場合はnull
+    } catch {
+      return null;
+    }
+  });
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [tempTargetCount, setTempTargetCount] = useState(targetCount || 10);
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [isEditingModal, setIsEditingModal] = useState(false); // 目標変更用モーダル
+
+  // 目標未設定の場合、初回表示時にポップアップを表示
+  useEffect(() => {
+    if (targetCount === null && logs.length > 0) {
+      // 記録がある場合のみポップアップを表示
+      setShowTargetModal(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveTargetCount = (count) => {
+    const num = parseInt(count, 10);
+    if (isNaN(num) || num < 1) return;
+    setTargetCount(num);
+    try {
+      localStorage.setItem('riko_target_count', num.toString());
+    } catch {}
+    setIsEditingTarget(false);
+    setShowTargetModal(false);
   };
 
-  const completeness = calculateCompleteness();
+  // 進捗率の計算
+  const progress = targetCount && targetCount > 0 ? Math.min(100, Math.round((logs.length / targetCount) * 100)) : 0;
   
-  // 登録日からの経過日数
-  const registeredDate = userProfile.registeredAt ? new Date(userProfile.registeredAt) : new Date();
-  const today = new Date();
-  const diffTime = Math.abs(today - registeredDate);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  // 応援メッセージの生成（毎回表示されるようにuseStateで管理）
+  const [encouragementMessage, setEncouragementMessage] = useState('');
+  
+  useEffect(() => {
+    try {
+      const generateMessage = () => {
+        const now = new Date();
+        const month = now.getMonth() + 1; // 1-12
+        const hour = now.getHours();
+        
+        // 季節判定
+        let season = '';
+        let seasonEmoji = '';
+        if (month >= 3 && month <= 5) {
+          season = '春';
+          seasonEmoji = '🌸';
+        } else if (month >= 6 && month <= 8) {
+          season = '夏';
+          seasonEmoji = '☀️';
+        } else if (month >= 9 && month <= 11) {
+          season = '秋';
+          seasonEmoji = '🍂';
+        } else {
+          season = '冬';
+          seasonEmoji = '❄️';
+        }
+        
+        // 時間帯判定
+        let timeGreeting = '';
+        if (hour >= 5 && hour < 12) {
+          timeGreeting = 'おはようございます';
+        } else if (hour >= 12 && hour < 18) {
+          timeGreeting = 'こんにちは';
+        } else {
+          timeGreeting = 'こんばんは';
+        }
+        
+        // 記録の状況を分析
+        const hasRecentLogs = logsLast7Days > 0;
+        const hasManyLogs = logs.length >= 10;
+        const hasEvidence = mediaStats.image + mediaStats.audio + mediaStats.video > 0;
+        const mainCategory = Object.keys(categoryStats).length > 0 
+          ? Object.entries(categoryStats).sort((a, b) => b[1] - a[1])[0][0]
+          : null;
+        const isProgressing = targetCount && progress > 0 && progress < 100;
+        const isAchieved = targetCount && progress >= 100;
+        
+        // 最新の記録の日付から経過日数を計算
+        let daysSinceLastLog = null;
+        if (logs.length > 0 && logs[0]?.date) {
+          try {
+            const lastLogDate = new Date(logs[0].date.replace(/\//g, '-'));
+            const diffTime = now - lastLogDate;
+            daysSinceLastLog = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          } catch {}
+        }
+        
+        // メッセージの選択
+        const messages = [];
+        
+        // 季節・時間帯の挨拶
+        messages.push(`${timeGreeting}。${seasonEmoji} ${season}の季節ですね。`);
+        
+        // 記録状況に基づくメッセージ
+        if (logs.length === 0) {
+          messages.push('今日から記録を始めましょう。あなたの一歩が、未来を変えます。');
+        } else if (daysSinceLastLog !== null && daysSinceLastLog === 0) {
+          messages.push('今日も記録を残せましたね。その積み重ねがあなたを守ります。');
+        } else if (daysSinceLastLog !== null && daysSinceLastLog <= 3) {
+          messages.push(`${daysSinceLastLog}日前に記録を残されていますね。継続は力です。`);
+        } else if (hasRecentLogs) {
+          messages.push(`最近${logsLast7Days}件の記録を残されていますね。素晴らしい継続力です。`);
+        } else if (hasManyLogs) {
+          messages.push(`${logs.length}件の記録が蓄積されています。あなたの努力は必ず報われます。`);
+        } else {
+          messages.push(`${logs.length}件の記録があります。一つ一つが大切な証拠になります。`);
+        }
+        
+        // カテゴリに基づくメッセージ
+        if (mainCategory) {
+          if (mainCategory.includes('暴力') || mainCategory.includes('DV')) {
+            messages.push('あなたは一人ではありません。記録を残すことで、あなた自身を守ることができます。');
+          } else if (mainCategory.includes('不貞')) {
+            messages.push('事実を記録することは、あなたの権利を守る第一歩です。');
+          } else if (mainCategory.includes('モラハラ')) {
+            messages.push('些細なことでも記録に残すことで、全体像が見えてきます。');
+          } else if (mainCategory.includes('生活費')) {
+            messages.push('経済的な記録も、離婚時の重要な証拠になります。');
+          } else if (mainCategory.includes('育児')) {
+            messages.push('お子様のためにも、記録を続けましょう。');
+          }
+        }
+        
+        // 証拠の有無
+        if (hasEvidence) {
+          const evidenceCount = mediaStats.image + mediaStats.audio + mediaStats.video;
+          messages.push(`写真や音声などの証拠が${evidenceCount}件あります。客観的な証拠は非常に有効です。`);
+        } else if (logs.length > 0) {
+          messages.push('可能であれば、写真や音声などの証拠も添付すると、より説得力が増します。');
+        }
+        
+        // 目標達成状況
+        if (isAchieved) {
+          messages.push('🎉 目標達成おめでとうございます！さらに上を目指しましょう。');
+        } else if (isProgressing) {
+          const remaining = targetCount - logs.length;
+          messages.push(`目標まであと${remaining}件です。頑張っていますね！`);
+        } else if (targetCount && progress === 0) {
+          messages.push('目標を設定すると、進捗を可視化できます。');
+        }
+        
+        // 励ましのメッセージ（ランダムに1つ選択）
+        const encouragement = [
+          'あなたの勇気ある行動が、新しい未来を切り開きます。',
+          '一人で抱え込まないでください。あなたには味方がいます。',
+          '記録を続けることで、あなたの声が届きます。',
+          '今日も一歩前進できました。その積み重ねが大切です。',
+          'あなたの記録は、あなた自身を守る盾になります。',
+          '困難な状況でも、あなたは一人ではありません。',
+          '同じような経験をしている人はたくさんいます。あなたは一人じゃありません。',
+          '記録を残すことは、自分を大切にすることです。',
+          'あなたの行動は、未来のあなたを守ります。',
+          '小さな一歩でも、続けることで大きな力になります。',
+        ];
+        messages.push(encouragement[Math.floor(Math.random() * encouragement.length)]);
+        
+        return messages.join(' ');
+      };
+      
+      setEncouragementMessage(generateMessage());
+    } catch (error) {
+      // エラーが発生した場合はデフォルトメッセージを表示
+      setEncouragementMessage('記録を続けることで、あなたの声が届きます。');
+    }
+  }, [logs.length, logsLast7Days, mediaStats.image, mediaStats.audio, mediaStats.video, JSON.stringify(categoryStats), targetCount, progress]);
   
   // 直近の記録日
   const lastLogDate = logs.length > 0 ? logs[0].date : "-";
+
+  // 過去7日の記録件数
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const logsLast7Days = logs.filter(log => {
+    if (!log.date) return false;
+    const logDate = new Date(log.date.replace(/\//g, '-'));
+    return logDate >= sevenDaysAgo;
+  }).length;
 
   // カテゴリ別集計
   const categoryStats = logs.reduce((acc, log) => {
@@ -961,7 +1126,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
     return acc;
   }, {});
 
-  // メディア別集計
+  // メディア別集計（証拠データ用）
   let mediaStats = { image: 0, audio: 0, video: 0 };
   logs.forEach(log => {
     if(log.attachments) {
@@ -1072,6 +1237,21 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
 
   return (
     <div className="p-4 space-y-4 pb-24">
+      {/* 応援メッセージ */}
+      <div className="bg-gradient-to-r from-pink-100 to-purple-100 border border-pink-200 rounded-xl shadow-sm p-4">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 bg-pink-500 rounded-full p-2">
+            <Heart size={18} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-pink-900 mb-1">応援メッセージ</div>
+            <div className="text-xs text-slate-700 leading-relaxed">
+              {encouragementMessage || '記録を続けることで、あなたの声が届きます。'}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ホーム画面に追加（偽装選択） */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div className="flex items-start justify-between gap-3">
@@ -1205,9 +1385,9 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
         <div className="flex justify-between items-end mb-6">
           <div>
             <h2 className="text-xs font-medium text-pink-200 mb-1 flex items-center gap-1">
-              <Clock size={12} /> 経過日数
+              <FileText size={12} /> 記録件数
             </h2>
-            <div className="text-3xl font-mono font-bold">{diffDays}<span className="text-base font-normal opacity-70 ml-1">日</span></div>
+            <div className="text-3xl font-mono font-bold">{logs.length}<span className="text-base font-normal opacity-70 ml-1">件</span></div>
             <p className="text-[10px] text-gray-400 mt-1">
                 ※継続的な記録は事実の証明に役立ちます
             </p>
@@ -1218,55 +1398,326 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
           </div>
         </div>
         
+        {/* 進捗バー */}
         <div className="space-y-2 border-t border-slate-700 pt-4">
-          <div className="flex justify-between text-xs font-medium">
-            <span>記録の充実度</span>
-            <span>{completeness}%</span>
+          {targetCount === null ? (
+            <div className="text-center">
+              <button
+                onClick={() => setShowTargetModal(true)}
+                className="bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-4 rounded-lg text-xs"
+              >
+                目標件数を設定する
+              </button>
+              <p className="text-[10px] text-gray-400 mt-2">
+                目標を設定すると、進捗を可視化できます
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <div className="flex items-center gap-2">
+                  <span>目標達成率</span>
+                  {isEditingTarget ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={tempTargetCount}
+                        onChange={(e) => setTempTargetCount(e.target.value)}
+                        onBlur={() => saveTargetCount(tempTargetCount)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveTargetCount(tempTargetCount);
+                          if (e.key === 'Escape') {
+                            setTempTargetCount(targetCount);
+                            setIsEditingTarget(false);
+                          }
+                        }}
+                        className="w-12 bg-slate-700 border border-slate-600 rounded px-1 text-xs text-white text-center"
+                        min="1"
+                        autoFocus
+                      />
+                      <span className="text-pink-200">件</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setTempTargetCount(targetCount);
+                        setIsEditingModal(true);
+                      }}
+                      className="text-pink-200 hover:text-pink-100 underline text-[10px]"
+                      title="目標件数を変更"
+                    >
+                      目標: {targetCount}件
+                    </button>
+                  )}
+                </div>
+                <span>{progress}%</span>
           </div>
           <div className="h-2 bg-slate-600 rounded-full overflow-hidden">
             <div 
               className="h-full bg-pink-500 transition-all duration-1000" 
-              style={{ width: `${completeness}%` }}
+                  style={{ width: `${progress}%` }}
             ></div>
           </div>
-          <p className="text-[10px] text-gray-300 mt-2 leading-relaxed">
-            {completeness < 30 ? "記録を開始したばかりです。些細な出来事でも、日時と場所を正確に残すことが、あなたを守る第一歩になります。" :
-             completeness < 70 ? "記録が蓄積されています。詳細なメモに加え、写真や音声などの客観的なデータがあると、より信頼性が高まります。" :
-             "十分な情報量が記録されています。弁護士への相談資料として活用できる水準です。"}
-          </p>
+              <p className="text-[10px] text-gray-300 mt-1">
+                {logs.length}件 / {targetCount}件
+              </p>
+            </>
+          )}
         </div>
       </div>
 
       {/* 統計データカード */}
       <div className="grid grid-cols-2 gap-3">
+        {/* 証拠データ */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <div className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
-            <FileText size={14} /> 記録総数
+          <div className="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1">
+            <TrendingUp size={14} className="text-slate-700" /> 証拠データ
           </div>
-          <div className="text-2xl font-bold text-slate-800 mb-2">{logs.length}<span className="text-xs font-normal text-gray-400 ml-1">件</span></div>
-          <div className="flex gap-2 text-[10px] text-gray-400">
-            <span className="flex items-center gap-0.5"><ImageIcon size={10}/> {mediaStats.image}</span>
-            <span className="flex items-center gap-0.5"><Mic size={10}/> {mediaStats.audio}</span>
-            <span className="flex items-center gap-0.5"><Video size={10}/> {mediaStats.video}</span>
+          <div className="flex items-center justify-around gap-2">
+            <div className="flex flex-col items-center">
+              <ImageIcon size={14} className="text-blue-600 mb-1" />
+              <span className="text-sm font-bold text-slate-800">{mediaStats.image}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <Mic size={14} className="text-green-600 mb-1" />
+              <span className="text-sm font-bold text-slate-800">{mediaStats.audio}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <Video size={14} className="text-pink-600 mb-1" />
+              <span className="text-sm font-bold text-slate-800">{mediaStats.video}</span>
+            </div>
         </div>
       </div>
       
+        {/* カテゴリ内訳 */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <div className="text-xs font-bold text-gray-500 mb-2">カテゴリ内訳</div>
+          <div className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
+            <FileText size={14} className="text-slate-700" /> カテゴリ内訳
+          </div>
+          <div className="mb-2">
+            <div className="text-[10px] text-gray-400">過去7日: {logsLast7Days}件</div>
+          </div>
           <div className="space-y-1 overflow-y-auto max-h-[60px] hide-scrollbar">
           {Object.keys(categoryStats).length === 0 ? (
-            <div className="text-[10px] text-gray-300">データなし</div>
+              <div className="text-[10px] text-gray-400">データなし</div>
           ) : (
               Object.entries(categoryStats).map(([cat, count]) => (
-                <div key={cat} className="flex justify-between text-[10px]">
-                  <span className="text-gray-600 truncate max-w-[80px]">{cat}</span>
-                  <span className="font-mono text-slate-700">{count}</span>
+                <div key={cat} className="text-[10px] text-gray-600">
+                  {cat} {count}件
                   </div>
               ))
           )}
         </div>
         </div>
       </div>
+
+      {/* 目標設定ポップアップ（初回設定用） */}
+      {showTargetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowTargetModal(false)} />
+          <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="p-5 border-b bg-gradient-to-r from-pink-50 to-purple-50">
+        <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-pink-600" /> 目標件数を設定しましょう
+          </h3>
+                <button
+                  onClick={() => setShowTargetModal(false)}
+                  className="p-1 rounded-full hover:bg-white/50 text-gray-600"
+                >
+                  <X size={18} />
+                </button>
+        </div>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                記録件数が増えると、以下のメリットがあります
+              </p>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="text-xs font-bold text-blue-900 mb-1 flex items-center gap-2">
+                  <FileText size={14} /> 証拠力の向上
+                </div>
+                <div className="text-[11px] text-blue-800 leading-relaxed">
+                  記録が多ければ多いほど、事実の積み上げができ、裁判や調停で有利になります。
+                </div>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="text-xs font-bold text-green-900 mb-1 flex items-center gap-2">
+                  <CheckCircle2 size={14} /> 勝率の向上
+                </div>
+                <div className="text-[11px] text-green-800 leading-relaxed">
+                  詳細な記録があると、AI慰謝料診断での勝率評価も上がりやすくなります。
+                </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                <div className="text-xs font-bold text-purple-900 mb-1 flex items-center gap-2">
+                  <Sparkles size={14} /> 慰謝料の増額
+                </div>
+                <div className="text-[11px] text-purple-800 leading-relaxed">
+                  継続的な記録は、精神的苦痛の継続性を証明し、慰謝料の増額につながります。
+                </div>
+              </div>
+
+              <div className="pt-3 border-t">
+                <label className="block text-xs font-bold text-gray-700 mb-2">
+                  目標件数を設定してください
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={tempTargetCount}
+                    onChange={(e) => setTempTargetCount(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-slate-900"
+                    min="1"
+                    placeholder="例: 20"
+                    autoFocus
+                  />
+                  <span className="text-xs text-gray-600">件</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setShowTargetModal(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg text-xs"
+              >
+                後で設定
+              </button>
+              <button
+                onClick={() => saveTargetCount(tempTargetCount)}
+                className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white font-bold px-6 py-2 rounded-lg text-xs shadow-md"
+              >
+                目標を設定する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 目標変更ポップアップ */}
+      {isEditingModal && targetCount !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsEditingModal(false)} />
+          <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="p-5 border-b bg-gradient-to-r from-pink-50 to-purple-50">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-pink-600" /> 目標件数を変更
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsEditingModal(false);
+                    setTempTargetCount(targetCount);
+                  }}
+                  className="p-1 rounded-full hover:bg-white/50 text-gray-600"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                現在の進捗を確認して、新しい目標を設定しましょう
+              </p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* 現在の進捗表示 */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <div className="text-xs font-bold text-gray-700 mb-2">現在の進捗</div>
+                <div className="flex items-end gap-2 mb-2">
+                  <div className="text-2xl font-bold text-slate-900">{logs.length}</div>
+                  <div className="text-sm text-gray-500 mb-1">件 / {targetCount}件</div>
+                </div>
+                <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-1">
+                  <div 
+                    className="h-full bg-pink-500 transition-all duration-1000" 
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-gray-600">
+                  達成率: <span className="font-bold text-pink-600">{progress}%</span>
+                  {progress >= 100 && (
+                    <span className="ml-2 text-green-600 font-bold">🎉 目標達成！</span>
+                  )}
+                </div>
+              </div>
+
+              {/* より高い目標を設定するメリット */}
+              {parseInt(tempTargetCount) > targetCount && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <div className="text-xs font-bold text-yellow-900 mb-1 flex items-center gap-2">
+                    <Sparkles size={14} /> 目標を上げると...
+                  </div>
+                  <div className="text-[11px] text-yellow-800 leading-relaxed">
+                    より多くの記録を残すことで、証拠力がさらに向上し、AI慰謝料診断での評価も上がります。
+                  </div>
+                </div>
+              )}
+
+              {parseInt(tempTargetCount) < targetCount && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="text-xs font-bold text-blue-900 mb-1 flex items-center gap-2">
+                    <CheckCircle2 size={14} /> 目標を調整すると...
+                  </div>
+                  <div className="text-[11px] text-blue-800 leading-relaxed">
+                    現在の進捗に合わせて目標を調整することで、より達成しやすい目標にできます。
+                  </div>
+                </div>
+              )}
+
+              {/* 目標設定 */}
+              <div className="pt-2 border-t">
+                <label className="block text-xs font-bold text-gray-700 mb-2">
+                  新しい目標件数を設定してください
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={tempTargetCount}
+                    onChange={(e) => setTempTargetCount(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold text-slate-900"
+                    min="1"
+                    placeholder="例: 20"
+                    autoFocus
+                  />
+                  <span className="text-xs text-gray-600">件</span>
+                </div>
+                {parseInt(tempTargetCount) > targetCount && (
+                  <p className="text-[10px] text-pink-600 mt-1">
+                    ✨ 現在より {parseInt(tempTargetCount) - targetCount}件多い目標です
+                  </p>
+                )}
+                {parseInt(tempTargetCount) < targetCount && (
+                  <p className="text-[10px] text-blue-600 mt-1">
+                    📉 現在より {targetCount - parseInt(tempTargetCount)}件少ない目標です
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 flex items-center justify-between gap-2">
+              <button
+                onClick={() => {
+                  setIsEditingModal(false);
+                  setTempTargetCount(targetCount);
+                }}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-lg text-xs"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => saveTargetCount(tempTargetCount)}
+                className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white font-bold px-6 py-2 rounded-lg text-xs shadow-md"
+              >
+                目標を変更する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI慰謝料診断 */}
       <button
@@ -1278,87 +1729,86 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <Sparkles size={16} className="text-pink-600" /> AI慰謝料診断
             </div>
-            <div className="text-xs text-gray-600 leading-relaxed mb-2">
+            <div className="text-xs text-gray-600 leading-relaxed mb-3">
               蓄積されたログをAIが分析し、「現時点での想定慰謝料：150万円」「勝率：60%」のように概算を出します。
             </div>
-            <div className="text-xs text-pink-600 font-bold flex items-center gap-1">
-              無料で診断を受ける <Sparkles size={12} />
+            <div className="bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold py-2.5 px-4 rounded-lg text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all">
+              <Sparkles size={16} /> 無料で診断を受ける
             </div>
           </div>
-          <ChevronRight size={20} className="text-pink-400 shrink-0 mt-1" />
         </div>
       </button>
 
       {/* 弁護士に相談する - プレミアム会員は非表示 */}
       {!isPremium && (
-      <a
-        href="https://www.bengo4.com/"
-        target="_blank"
-        rel="noopener noreferrer"
+          <a
+            href="https://www.bengo4.com/"
+            target="_blank"
+            rel="noopener noreferrer"
         className="block bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
-      >
-        <div className="flex items-start justify-between gap-3">
+          >
+            <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <Users size={16} className="text-blue-600" /> 弁護士に相談する
-            </div>
+                </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
               記録をもとに、専門家に早めに相談して方針を整理する。多くの事務所で初回相談無料。
-            </div>
+                </div>
             <div className="text-xs text-blue-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
-            </div>
+              </div>
           </div>
           <ChevronRight size={20} className="text-blue-400 shrink-0 mt-1" />
-        </div>
-      </a>
+            </div>
+          </a>
       )}
 
       {/* 浮気調査を依頼する - プレミアム会員は非表示 */}
       {!isPremium && (
-      <a
-        href="https://www.private-eye.jp/"
-        target="_blank"
-        rel="noopener noreferrer"
+          <a
+            href="https://www.private-eye.jp/"
+            target="_blank"
+            rel="noopener noreferrer"
         className="block bg-purple-50 border border-purple-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
-      >
-        <div className="flex items-start justify-between gap-3">
+          >
+            <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <User size={16} className="text-purple-600" /> 浮気調査を依頼する
-            </div>
+                </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
               不貞の立証が必要なケース向けに、専門家に依頼できます。GPS調査、行動調査など、様々な調査方法があります。
-            </div>
+                </div>
             <div className="text-xs text-purple-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
-            </div>
+              </div>
           </div>
           <ChevronRight size={20} className="text-purple-400 shrink-0 mt-1" />
-        </div>
-      </a>
+            </div>
+          </a>
       )}
 
       {/* 離婚後の生活支援 */}
-      <button
+            <button
         onClick={onShowLifeSupport}
         className="w-full bg-green-50 border border-green-200 rounded-xl shadow-sm p-4 hover:shadow-md transition text-left relative"
-      >
-        <div className="flex items-start justify-between gap-3">
+            >
+              <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <HeartHandshake size={16} className="text-green-600" /> 離婚後の生活支援
-            </div>
+                  </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
               住まい探し（賃貸・シェアハウス）、仕事探し（転職・パート）、シングルマザー向け保険など、新しい生活を始めるためのサポートサービスをご紹介します。
-            </div>
+                  </div>
             <div className="text-xs text-green-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
-            </div>
+                </div>
           </div>
           <ChevronRight size={20} className="text-green-400 shrink-0 mt-1" />
-        </div>
-      </button>
+              </div>
+            </button>
 
       {/* プレミアムプラン */}
       <button
@@ -1369,10 +1819,10 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <Crown size={16} className="text-yellow-600" /> プレミアムプラン
-            </div>
+        </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
-              月額300〜500円で容量無制限・広告非表示・カモフラージュアイコン変更が可能です。
-            </div>
+              月額450円で容量無制限・広告非表示・カモフラージュアイコン変更が可能です。
+      </div>
             <div className="text-xs text-yellow-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
             </div>
@@ -2504,22 +2954,13 @@ const PremiumPlanView = ({ user, onClose }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => handleSubscribe(300)}
-              className="bg-gradient-to-r from-pink-600 to-purple-600 text-white p-4 rounded-xl shadow-sm hover:shadow-md transition"
-            >
-              <div className="text-lg font-bold mb-1">¥300</div>
-              <div className="text-[10px] text-pink-50/90">月額</div>
-            </button>
-            <button
-              onClick={() => handleSubscribe(500)}
-              className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 rounded-xl shadow-sm hover:shadow-md transition border-2 border-yellow-400"
-            >
-              <div className="text-lg font-bold mb-1">¥500</div>
-              <div className="text-[10px] text-yellow-50/90">月額（推奨）</div>
-            </button>
-          </div>
+          <button
+            onClick={() => handleSubscribe(450)}
+            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 rounded-xl shadow-md hover:shadow-lg transition border-2 border-yellow-400"
+          >
+            <div className="text-2xl font-bold mb-1">¥450</div>
+            <div className="text-sm text-yellow-50/90">月額</div>
+          </button>
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
             <div className="text-[10px] text-yellow-800 leading-relaxed">
@@ -2528,8 +2969,8 @@ const PremiumPlanView = ({ user, onClose }) => {
           </div>
         </div>
       )}
-    </div>
-  );
+        </div>
+    );
 };
 
 // --- MainApp ---
@@ -2603,7 +3044,16 @@ export default function App() {
   }, []);
 
   const handleLogin = (user) => {
+    try {
+      if (!user) {
+        console.error("ユーザー情報が正しく渡されていません");
+        return;
+      }
     setCurrentUser(user);
+    } catch (error) {
+      console.error("ログイン処理でエラーが発生しました:", error);
+      alert("ログイン処理中にエラーが発生しました。もう一度お試しください。");
+    }
   };
 
   const handleLogout = () => {
