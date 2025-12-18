@@ -304,8 +304,12 @@ const AuthScreen = ({ onLogin }) => {
         registeredAt: new Date().toISOString()
       };
       
+      console.log("ユーザープロフィールを保存中:", userProfile);
       localStorage.setItem("riko_user", JSON.stringify(userProfile));
+      console.log("localStorageに保存完了");
+      console.log("onLoginを呼び出し中...");
       onLogin(userProfile);
+      console.log("onLogin呼び出し完了");
     } catch (error) {
       console.error("ログイン処理でエラーが発生しました:", error);
       alert("ログイン処理中にエラーが発生しました。もう一度お試しください。");
@@ -326,7 +330,7 @@ const AuthScreen = ({ onLogin }) => {
   };
 
   return (
-    <div className="h-screen bg-slate-50 p-4 sm:p-6 flex flex-col justify-center overflow-y-auto" style={{ transform: 'scale(0.85)', transformOrigin: 'center center' }}>
+    <div className="h-screen bg-slate-50 p-4 sm:p-6 flex flex-col justify-center overflow-y-auto" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="text-center mb-6 sm:mb-8">
         <div className="inline-block p-3 sm:p-4 bg-slate-900 rounded-full mb-3 sm:mb-4 shadow-xl">
           <ShieldAlert size={40} className="text-pink-500 sm:w-12 sm:h-12" />
@@ -969,6 +973,37 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
     setShowTargetModal(false);
   };
 
+  // 直近の記録日
+  const lastLogDate = logs.length > 0 ? logs[0].date : "-";
+
+  // 過去7日の記録件数
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const logsLast7Days = logs.filter(log => {
+    if (!log.date) return false;
+    const logDate = new Date(log.date.replace(/\//g, '-'));
+    return logDate >= sevenDaysAgo;
+  }).length;
+
+  // カテゴリ別集計
+  const categoryStats = logs.reduce((acc, log) => {
+    acc[log.category] = (acc[log.category] || 0) + 1;
+    return acc;
+  }, {});
+
+  // メディア別集計（証拠データ用）
+  const mediaStats = useMemo(() => {
+    const stats = { image: 0, audio: 0, video: 0 };
+    logs.forEach(log => {
+      if(log.attachments) {
+        log.attachments.forEach(att => {
+          if(stats[att.type] !== undefined) stats[att.type]++;
+        });
+      }
+    });
+    return stats;
+  }, [logs]);
+
   // 進捗率の計算
   const progress = targetCount && targetCount > 0 ? Math.min(100, Math.round((logs.length / targetCount) * 100)) : 0;
   
@@ -1107,34 +1142,6 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
       setEncouragementMessage('記録を続けることで、あなたの声が届きます。');
     }
   }, [logs.length, logsLast7Days, mediaStats.image, mediaStats.audio, mediaStats.video, JSON.stringify(categoryStats), targetCount, progress]);
-  
-  // 直近の記録日
-  const lastLogDate = logs.length > 0 ? logs[0].date : "-";
-
-  // 過去7日の記録件数
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const logsLast7Days = logs.filter(log => {
-    if (!log.date) return false;
-    const logDate = new Date(log.date.replace(/\//g, '-'));
-    return logDate >= sevenDaysAgo;
-  }).length;
-
-  // カテゴリ別集計
-  const categoryStats = logs.reduce((acc, log) => {
-    acc[log.category] = (acc[log.category] || 0) + 1;
-    return acc;
-  }, {});
-
-  // メディア別集計（証拠データ用）
-  let mediaStats = { image: 0, audio: 0, video: 0 };
-  logs.forEach(log => {
-    if(log.attachments) {
-      log.attachments.forEach(att => {
-        if(mediaStats[att.type] !== undefined) mediaStats[att.type]++;
-      });
-    }
-  });
 
   // --- プレミアムプランチェック ---
   const isPremium = useMemo(() => checkPremiumStatus(), []);
@@ -2977,10 +2984,17 @@ const PremiumPlanView = ({ user, onClose }) => {
 const MainApp = ({ onLock, user, onLogout }) => {
   const [view, setView] = useState("dashboard"); // dashboard, timeline, add, messages, board, export, safety, lifeSupport, premium
   const [logs, setLogs] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    try {
     const loaded = loadLocalStorageJSON("riko_logs", { expected: 'array', fallback: [] });
     setLogs(loaded.value);
+    } catch (err) {
+      console.error("ログの読み込みエラー:", err);
+      setError("ログの読み込みに失敗しました");
+      setLogs([]);
+    }
   }, []);
 
   const addLog = (newLog) => {
@@ -2990,8 +3004,29 @@ const MainApp = ({ onLock, user, onLogout }) => {
       setView("timeline");
   };
 
-  return (
-    <div className="h-full w-full flex flex-col bg-slate-50 relative overflow-hidden font-sans text-slate-900" style={{ minHeight: '100vh', minHeight: '100dvh' }}>
+  if (error) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
+          <p className="text-sm text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              setLogs([]);
+            }}
+            className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
+          >
+            再試行
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+    return (
+      <div className="h-full w-full flex flex-col bg-slate-50 relative overflow-hidden font-sans text-slate-900" style={{ minHeight: '100dvh' }}>
       <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
         <button onClick={() => setView('dashboard')} className="font-bold text-lg tracking-wider flex items-center gap-2 hover:opacity-80 transition-opacity">
           <ShieldAlert size={20} className="text-pink-500" />
@@ -3037,10 +3072,16 @@ const MainApp = ({ onLock, user, onLogout }) => {
 export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const loaded = loadLocalStorageJSON("riko_user", { expected: 'object', fallback: null });
-    if (loaded.value) setCurrentUser(loaded.value);
+    try {
+      const loaded = loadLocalStorageJSON("riko_user", { expected: 'object', fallback: null });
+      if (loaded.value) setCurrentUser(loaded.value);
+    } catch (err) {
+      console.error("ユーザー情報の読み込みエラー:", err);
+      setError("ユーザー情報の読み込みに失敗しました");
+    }
   }, []);
 
   const handleLogin = (user) => {
@@ -3049,9 +3090,13 @@ export default function App() {
         console.error("ユーザー情報が正しく渡されていません");
         return;
       }
-    setCurrentUser(user);
+      console.log("ログイン処理開始:", user);
+      setCurrentUser(user);
+      setError(null);
+      console.log("ログイン処理完了");
     } catch (error) {
       console.error("ログイン処理でエラーが発生しました:", error);
+      setError("ログイン処理中にエラーが発生しました");
       alert("ログイン処理中にエラーが発生しました。もう一度お試しください。");
     }
   };
@@ -3061,13 +3106,58 @@ export default function App() {
     localStorage.removeItem("riko_user");
   };
 
-  if (!isUnlocked) {
-    return <CalculatorMode onUnlock={() => setIsUnlocked(true)} />;
+  // エラー表示
+  if (error) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
+          <p className="text-sm text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              setCurrentUser(null);
+              setIsUnlocked(false);
+              localStorage.removeItem("riko_user");
+            }}
+            className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
+          >
+            リセット
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  if (!currentUser) {
-    return <AuthScreen onLogin={handleLogin} />;
-  }
+  try {
+    if (!isUnlocked) {
+      return <CalculatorMode onUnlock={() => setIsUnlocked(true)} />;
+    }
 
-  return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} />;
+    if (!currentUser) {
+      return <AuthScreen onLogin={handleLogin} />;
+    }
+
+    return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} />;
+  } catch (error) {
+    console.error("アプリのレンダリングエラー:", error);
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full text-center">
+          <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
+          <p className="text-sm text-gray-600 mb-4">アプリの読み込み中にエラーが発生しました: {error.message}</p>
+          <button
+            onClick={() => {
+              window.location.reload();
+            }}
+            className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
+          >
+            ページを再読み込み
+          </button>
+        </div>
+      </div>
+    );
+  }
 }
