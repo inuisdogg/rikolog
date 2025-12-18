@@ -138,6 +138,18 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 10,
   },
+  watermark: {
+    position: 'absolute',
+    top: '40%',
+    left: '20%',
+    fontSize: 64,
+    color: '#E5E7EB',
+    opacity: 0.25,
+    fontWeight: 'bold',
+    zIndex: 1000,
+    width: '100%',
+    textAlign: 'center',
+  },
 
 });
 
@@ -151,13 +163,17 @@ function formatEvidence(attachments) {
 // {
 //   header: { date: string, court: string, author: string },
 //   introduction: string,
-//   events: [{ date: string, location: string, category: string, detail: string, evidence: string }]
+//   events: [{ date: string, location: string, category: string, detail: string, evidence: string }],
+//   isFreePlan?: boolean,  // 無料プランかどうか
+//   watermark?: string    // 透かしテキスト（デフォルト: 'SAMPLE'）
 // }
 export const StatementDocument = ({ data }) => {
   ensureJapaneseFont();
 
   const header = data?.header || {};
   const events = Array.isArray(data?.events) ? data.events : [];
+  const isFreePlan = data?.isFreePlan === true;
+  const watermark = data?.watermark || 'SAMPLE';
 
   const chunk = (arr, size) => {
     const out = [];
@@ -165,7 +181,9 @@ export const StatementDocument = ({ data }) => {
     return out.length ? out : [[]];
   };
   // 1ページあたりの行数（本文の長さで可変にするのは将来の改善点）
-  const pages = chunk(events, 14);
+  const allPages = chunk(events, 14);
+  // 無料プランでは1ページ目のみ表示
+  const pages = isFreePlan ? allPages.slice(0, 1) : allPages;
 
   return (
     <Document>
@@ -175,6 +193,11 @@ export const StatementDocument = ({ data }) => {
 
         return (
           <Page key={pageIndex} size="A4" style={styles.page}>
+            {/* 透かし（無料プランの場合） */}
+            {isFreePlan && (
+              <Text style={styles.watermark}>{watermark}</Text>
+            )}
+            
             {!isFirst && <Text style={styles.continuedTitle}>陳 述 書（続き）</Text>}
 
             {isFirst && (

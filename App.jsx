@@ -43,7 +43,16 @@ import {
   Crown,
   XCircle,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Edit,
+  Save,
+  MessageCircle,
+  Trash2,
+  Search,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 // --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
@@ -223,6 +232,29 @@ function checkPremiumStatus() {
     return false;
   }
 }
+
+// プラン管理ユーティリティ
+const PLAN_TYPES = {
+  FREE: 'free',
+  PREMIUM: 'premium'
+};
+
+function getUserPlan() {
+  return checkPremiumStatus() ? PLAN_TYPES.PREMIUM : PLAN_TYPES.FREE;
+}
+
+// 無料プランの制限
+const FREE_PLAN_LIMITS = {
+  // メディア保存：写真のみ（容量制限あり）
+  ALLOWED_MEDIA_TYPES: ['image'], // 写真のみ
+  MAX_ATTACHMENTS: 3,
+  MAX_FILE_SIZE_MB: 10,
+  // PDF出力：1ページ目まで無料＋透かし
+  PDF_MAX_PAGES_FREE: 1,
+  PDF_WATERMARK: 'SAMPLE',
+  // メディア保存：ローカル保存のみ（クラウド保存は不可）
+  CLOUD_STORAGE_ENABLED: false
+};
 
 // --- 1. カモフラージュ用 電卓モード ---
 const CalculatorMode = ({ onUnlock }) => {
@@ -1843,7 +1875,11 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
 };
 
 // --- 5. 提出用PDFプレビュー画面 ---
-const ExportView = ({ logs, userProfile }) => {
+const ExportView = ({ logs, userProfile, onShowPremium }) => {
+  const isPremium = checkPremiumStatus();
+  const userPlan = getUserPlan();
+  const isFreePlan = userPlan === PLAN_TYPES.FREE;
+
   const sampleLogs = [
     {
       date: "2025/01/10",
@@ -1857,11 +1893,21 @@ const ExportView = ({ logs, userProfile }) => {
 
   const effectiveLogs = logs && logs.length > 0 ? logs : sampleLogs;
     const statementData = useMemo(
-    () => buildStatementDataFromLogs({ logs: effectiveLogs, userProfile }),
-    [effectiveLogs, userProfile]
+    () => {
+      const baseData = buildStatementDataFromLogs({ logs: effectiveLogs, userProfile });
+      return {
+        ...baseData,
+        isFreePlan,
+        watermark: isFreePlan ? FREE_PLAN_LIMITS.PDF_WATERMARK : undefined,
+      };
+    },
+    [effectiveLogs, userProfile, isFreePlan]
     );
 
-  const fileName = `陳述書_${new Date().toLocaleDateString('ja-JP').replaceAll('/', '-')}.pdf`;
+  // 無料プランでは1ページ目のみのため、ファイル名に「サンプル」を追加
+  const fileName = isFreePlan 
+    ? `陳述書_サンプル_${new Date().toLocaleDateString('ja-JP').replaceAll('/', '-')}.pdf`
+    : `陳述書_${new Date().toLocaleDateString('ja-JP').replaceAll('/', '-')}.pdf`;
 
     return (
     <div className="p-4 pb-24">
@@ -1874,21 +1920,38 @@ const ExportView = ({ logs, userProfile }) => {
         <span className="text-pink-600">※表示中のプレビューと実際のPDFは同一のフォーマットです。</span>
       </p>
 
-      {/* PDFプレビュー（本番もこの体裁を常用する） */}
-      <div className="bg-white border border-gray-300 shadow-md overflow-hidden rounded-xl">
+      {/* 無料プラン時の制限通知 */}
+      {isFreePlan && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg mb-4">
+          <div className="flex items-start gap-2">
+            <Crown size={16} className="text-yellow-600 mt-0.5" />
+            <div className="flex-1">
+              <div className="text-sm font-bold text-yellow-900 mb-1">無料プランの制限</div>
+              <div className="text-xs text-yellow-800 leading-relaxed">
+                無料プランでは、<strong>1ページ目のみ</strong>出力可能です。また、PDFには「<strong>SAMPLE</strong>」という透かしが入ります。
+                <br />
+                全ページ出力・透かしなしの正式版をご希望の場合は、プレミアムプランへのアップグレードが必要です。
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDFプレビュー（大きく表示） */}
+      <div className="bg-white border border-gray-300 shadow-md overflow-hidden rounded-xl" style={{ height: 'calc(100vh - 200px)' }}>
         <BlobProvider document={<StatementDocument data={statementData} />}>
           {({ url, loading, error }) => {
             if (loading) {
-              return <div className="p-6 text-xs text-gray-500">プレビューを生成中...</div>;
+              return <div className="p-6 text-xs text-gray-500 h-full flex items-center justify-center">プレビューを生成中...</div>;
             }
             if (error || !url) {
-              return <div className="p-6 text-xs text-red-600">プレビューの生成に失敗しました。</div>;
+              return <div className="p-6 text-xs text-red-600 h-full flex items-center justify-center">プレビューの生成に失敗しました。</div>;
             }
             return (
               <iframe
                 title="陳述書プレビュー"
                 src={url}
-                className="w-full h-[600px]"
+                className="w-full h-full border-0"
               />
             );
           }}
@@ -1903,13 +1966,26 @@ const ExportView = ({ logs, userProfile }) => {
         >
           {({ loading }) => (
             <>
-              <FileText size={18} /> {loading ? "PDF生成中…" : "PDFファイルを出力する"}
+              <FileText size={18} /> {loading ? "PDF生成中…" : isFreePlan ? "PDFファイルを出力する（1ページ目・透かし付き）" : "PDFファイルを出力する"}
         </>
       )}
         </PDFDownloadLink>
         <p className="text-[10px] text-center text-gray-500 mt-2">
-          ※端末にPDFとして保存されます。コンビニ等で印刷可能です。
+          {isFreePlan 
+            ? "※無料プランでは1ページ目のみ、透かし付きで出力されます。"
+            : "※端末にPDFとして保存されます。コンビニ等で印刷可能です。"
+          }
         </p>
+        {isFreePlan && (
+          <div className="mt-3">
+            <button
+              onClick={onShowPremium}
+              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+            >
+              <Crown size={14} /> プレミアムプランで全ページ出力・透かしなし版を利用する
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2176,82 +2252,908 @@ const NavBtn = ({ icon: Icon, label, active, onClick, isMain }) => (
   </button>
 );
 
-const TimelineView = ({ logs }) => (
-  <div className="p-4 space-y-4 pb-24">
-    {logs.length === 0 ? (
-      <div className="text-center py-20 text-gray-400">
-        <FileText size={48} className="mx-auto mb-2 opacity-20" />
-        <p>まだ記録がありません。</p>
-      </div>
-    ) : (
-      logs.map((log, idx) => (
-        <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-900 relative">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">
+const LogDetailView = ({ log, onClose, onUpdate }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(log.content || '');
+  const [editedCategory, setEditedCategory] = useState(log.category || 'モラハラ');
+  const [editedLocation, setEditedLocation] = useState(log.location || '');
+  const [editedAttachments, setEditedAttachments] = useState(log.attachments || []);
+  const [newComment, setNewComment] = useState('');
+  const comments = log.comments || [];
+  const isPremium = checkPremiumStatus();
+  const userPlan = getUserPlan();
+
+  const categories = ["モラハラ", "暴力・DV", "不貞・浮気", "生活費未払い", "育児放棄", "通院・診断書", "その他"];
+
+  const handleFileSelect = (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // 無料プラン：写真のみ許可
+    if (userPlan === PLAN_TYPES.FREE) {
+      if (type !== 'image') {
+        alert('無料プランでは写真のみ添付できます。録音・動画はプレミアムプランでご利用いただけます。');
+        e.target.value = '';
+        return;
+      }
+      
+      if (editedAttachments.length >= FREE_PLAN_LIMITS.MAX_ATTACHMENTS) {
+        alert(`無料版では最大${FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで添付できます。プレミアムプランで無制限になります。`);
+        e.target.value = '';
+        return;
+      }
+      
+      const fileSizeMB = file.size / (1024 * 1024);
+      if (fileSizeMB > FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB) {
+        alert(`無料版では1ファイルあたり最大${FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまでです。プレミアムプランで無制限になります。`);
+        e.target.value = '';
+        return;
+      }
+    }
+    
+    setEditedAttachments([...editedAttachments, { type, name: file.name, size: file.size }]);
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index) => {
+    const newAtt = [...editedAttachments];
+    newAtt.splice(index, 1);
+    setEditedAttachments(newAtt);
+  };
+
+  const handleSave = () => {
+    const updatedLog = {
+      ...log,
+      content: editedContent,
+      category: editedCategory,
+      location: editedLocation,
+      attachments: editedAttachments,
+    };
+    onUpdate(updatedLog);
+    setIsEditing(false);
+  };
+
+  const handleEditStart = () => {
+    setEditedAttachments(log.attachments || []);
+    setIsEditing(true);
+  };
+
+  const handleAddComment = () => {
+    if (!newComment.trim()) return;
+    const now = new Date();
+    const comment = {
+      text: newComment.trim(),
+      date: now.toLocaleDateString(),
+      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    const updatedLog = {
+      ...log,
+      comments: [...comments, comment],
+    };
+    onUpdate(updatedLog);
+    setNewComment('');
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      style={{ 
+        touchAction: 'none'
+      }}
+    >
+      <div 
+        className="w-full sm:w-auto sm:min-w-[500px] sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[85vh]"
+        style={{ 
+          touchAction: 'pan-y',
+          WebkitOverflowScrolling: 'touch',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-3 sm:p-4 border-b flex items-center justify-between shrink-0 flex-shrink-0">
+          <h2 className="text-base sm:text-lg font-bold text-slate-900">ログ詳細</h2>
+          <div className="flex items-center gap-1 sm:gap-2">
+            {!isEditing ? (
+              <button
+                onClick={handleEditStart}
+                className="p-1.5 sm:p-2 rounded-full active:bg-gray-100 text-gray-600 touch-manipulation"
+                title="編集"
+              >
+                <Edit size={16} className="sm:w-[18px] sm:h-[18px]" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSave}
+                className="p-1.5 sm:p-2 rounded-full active:bg-green-100 text-green-600 touch-manipulation"
+                title="保存"
+              >
+                <Save size={16} className="sm:w-[18px] sm:h-[18px]" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 sm:p-2 rounded-full active:bg-gray-100 text-gray-600 touch-manipulation"
+              title="閉じる"
+            >
+              <X size={16} className="sm:w-[18px] sm:h-[18px]" />
+            </button>
+          </div>
+        </div>
+
+        <div 
+          className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3 sm:space-y-4" 
+          style={{ 
+            WebkitOverflowScrolling: 'touch',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            minHeight: 0,
+            flex: '1 1 auto',
+            maxHeight: '100%',
+            position: 'relative'
+          }}
+        >
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+            <span className="text-[10px] sm:text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block">
               {log.date} {log.time}
             </span>
-            <span
-              className={`text-xs font-bold px-2 py-1 rounded text-white
-                ${log.category === '暴力・DV' ? 'bg-red-600' :
-                  log.category === '不貞・浮気' ? 'bg-purple-600' :
-                  log.category === 'モラハラ' ? 'bg-orange-500' :
-                  log.category === '通院・診断書' ? 'bg-rose-600' :
-                  'bg-gray-500'
-                }`}
-            >
-              {log.category}
-            </span>
+            {isEditing ? (
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                {categories.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setEditedCategory(c)}
+                    className={`px-2 py-1 rounded text-[10px] sm:text-xs font-bold border transition touch-manipulation active:scale-95 ${
+                      editedCategory === c
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white text-gray-600 border-gray-200"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span
+                className={`text-[10px] sm:text-xs font-bold px-2 py-1 rounded text-white inline-block
+                  ${log.category === '暴力・DV' ? 'bg-red-600' :
+                    log.category === '不貞・浮気' ? 'bg-purple-600' :
+                    log.category === 'モラハラ' ? 'bg-orange-500' :
+                    log.category === '通院・診断書' ? 'bg-rose-600' :
+                    'bg-gray-500'
+                  }`}
+              >
+                {log.category}
+              </span>
+            )}
           </div>
 
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.content}</p>
+          {isEditing ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">場所</label>
+                <input
+                  value={editedLocation}
+                  onChange={(e) => setEditedLocation(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded p-2.5 text-sm"
+                  style={{ fontSize: '16px' }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">内容</label>
+                <textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded p-3 text-sm resize-none"
+                  rows={8}
+                  style={{ fontSize: '16px', minHeight: '120px' }}
+                />
+              </div>
+
+              {/* 証拠画像の管理 */}
+              <div className="border-t pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-gray-500">証拠画像・ファイル</label>
+                  {!isPremium && (
+                    <span className="text-[9px] text-gray-400">
+                      {editedAttachments.length}/{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個
+                    </span>
+                  )}
+                </div>
+
+                {/* 既存の添付ファイル一覧 */}
+                {editedAttachments.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {editedAttachments.map((att, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between p-2 rounded-lg border
+                          ${att.type === 'image' ? 'bg-blue-50 border-blue-200' :
+                            att.type === 'audio' ? 'bg-green-50 border-green-200' :
+                            'bg-pink-50 border-pink-200'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {att.type === 'image' && <ImageIcon size={16} className="text-blue-600 shrink-0" />}
+                          {att.type === 'audio' && <Mic size={16} className="text-green-600 shrink-0" />}
+                          {att.type === 'video' && <Video size={16} className="text-pink-600 shrink-0" />}
+                          <span className="text-xs text-gray-700 truncate">{att.name}</span>
+                          {att.size && (
+                            <span className="text-[10px] text-gray-500 shrink-0">
+                              ({(att.size / (1024 * 1024)).toFixed(2)}MB)
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => removeAttachment(index)}
+                          className="p-1 rounded-full hover:bg-red-100 text-red-600 touch-manipulation shrink-0"
+                          title="削除"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ファイル追加ボタン */}
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 cursor-pointer hover:bg-blue-100 touch-manipulation">
+                    <Camera size={14} />
+                    写真を追加
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleFileSelect(e, 'image')}
+                    />
+                  </label>
+                  {isPremium && (
+                    <>
+                      <label className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs font-bold text-green-700 cursor-pointer hover:bg-green-100 touch-manipulation">
+                        <Mic size={14} />
+                        録音を追加
+                        <input
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          onChange={(e) => handleFileSelect(e, 'audio')}
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 px-3 py-2 bg-pink-50 border border-pink-200 rounded-lg text-xs font-bold text-pink-700 cursor-pointer hover:bg-pink-100 touch-manipulation">
+                        <Video size={14} />
+                        動画を追加
+                        <input
+                          type="file"
+                          accept="video/*"
+                          className="hidden"
+                          onChange={(e) => handleFileSelect(e, 'video')}
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                {!isPremium && (
+                  <p className="text-[9px] text-gray-500 mt-2">
+                    無料プラン: 写真のみ添付可能（最大{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個、1ファイルあたり{FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまで）。録音・動画はプレミアムプランでご利用いただけます。
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              {log.location && (
+                <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-1">
+                  <MapPin size={12} className="sm:w-[14px] sm:h-[14px]" />
+                  {log.location}
+                </div>
+              )}
+              <p className="text-sm sm:text-base text-gray-700 whitespace-pre-wrap leading-relaxed">{log.content}</p>
+            </>
+          )}
 
           {log.medical && (
-            <div className="mt-3 bg-rose-50 border border-rose-200 rounded-lg p-3">
-              <div className="text-[10px] font-bold text-rose-800 mb-1">
+            <div className="mt-3 bg-rose-50 border border-rose-200 rounded-lg p-2.5 sm:p-3">
+              <div className="text-[9px] sm:text-[10px] font-bold text-rose-800 mb-1">
                 医療記録（通院・診断書）
               </div>
-              <div className="text-xs text-rose-900 space-y-1">
+              <div className="text-[11px] sm:text-xs text-rose-900 space-y-1">
                 {(log.medical.visitType || log.medical.facility || log.medical.department) && (
-                  <div className="text-[11px]">
+                  <div className="text-[10px] sm:text-[11px] break-words">
                     {log.medical.visitType ? `種別: ${log.medical.visitType}` : ''}
                     {log.medical.facility ? ` / 医療機関: ${log.medical.facility}` : ''}
                     {log.medical.department ? ` / 診療科: ${log.medical.department}` : ''}
                   </div>
                 )}
-                {log.medical.diagnosis && <div className="text-[11px]">診断名/所見: {log.medical.diagnosis}</div>}
+                {log.medical.diagnosis && <div className="text-[10px] sm:text-[11px] break-words">診断名/所見: {log.medical.diagnosis}</div>}
                 {Array.isArray(log.medical.proofs) && log.medical.proofs.length > 0 && (
-                  <div className="text-[11px]">資料: {log.medical.proofs.join('、')}</div>
+                  <div className="text-[10px] sm:text-[11px] break-words">資料: {log.medical.proofs.join('、')}</div>
                 )}
+                {log.medical.memo && <div className="text-[10px] sm:text-[11px] mt-2 break-words">メモ: {log.medical.memo}</div>}
               </div>
             </div>
           )}
 
           {log.attachments && log.attachments.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2">
               {log.attachments.map((att, i) => (
                 <span
                   key={i}
-                  className={`text-[10px] px-2 py-1 rounded flex items-center gap-1 border
+                  className={`text-[9px] sm:text-[10px] px-2 py-1 rounded flex items-center gap-1 border shrink-0
                     ${att.type === 'image' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                       att.type === 'audio' ? 'bg-green-50 text-green-700 border-green-100' :
                       'bg-pink-50 text-pink-700 border-pink-100'
                     }`}
                 >
-                  {att.type === 'image' && <ImageIcon size={12} />}
-                  {att.type === 'audio' && <Mic size={12} />}
-                  {att.type === 'video' && <Video size={12} />}
-                  {att.name}
+                  {att.type === 'image' && <ImageIcon size={10} className="sm:w-3 sm:h-3" />}
+                  {att.type === 'audio' && <Mic size={10} className="sm:w-3 sm:h-3" />}
+                  {att.type === 'video' && <Video size={10} className="sm:w-3 sm:h-3" />}
+                  <span className="truncate max-w-[120px] sm:max-w-none">{att.name}</span>
                 </span>
               ))}
             </div>
           )}
-        </div>
-      ))
-    )}
-  </div>
-);
 
-const AddLogView = ({ onSave, onCancel }) => {
+          <div className="border-t pt-3 sm:pt-4 mt-3 sm:mt-4">
+            <div className="flex items-center gap-2 mb-2 sm:mb-3">
+              <MessageCircle size={14} className="sm:w-4 sm:h-4 text-gray-600" />
+              <h3 className="text-xs sm:text-sm font-bold text-gray-700">コメント</h3>
+              {comments.length > 0 && (
+                <span className="text-[10px] sm:text-xs text-gray-500">({comments.length})</span>
+              )}
+            </div>
+
+            {comments.length > 0 && (
+              <div className="space-y-2 mb-3 sm:mb-4 max-h-[200px] overflow-y-auto">
+                {comments.map((comment, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-2.5 sm:p-3 border border-gray-200">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-[9px] sm:text-[10px] text-gray-500">
+                        {comment.date} {comment.time}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{comment.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="コメントを追加..."
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm resize-none"
+                rows={2}
+                style={{ fontSize: '16px' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    handleAddComment();
+                  }
+                }}
+              />
+              <button
+                onClick={handleAddComment}
+                disabled={!newComment.trim()}
+                className={`px-3 sm:px-4 py-2 rounded-lg font-bold text-xs sm:text-sm flex items-center gap-1 touch-manipulation active:scale-95 shrink-0 ${
+                  newComment.trim()
+                    ? 'bg-pink-600 active:bg-pink-700 text-white'
+                    : 'bg-gray-200 text-gray-400'
+                }`}
+              >
+                <Send size={14} className="sm:w-4 sm:h-4" />
+              </button>
+            </div>
+            <p className="text-[9px] sm:text-[10px] text-gray-400 mt-1">Cmd/Ctrl + Enter で送信</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
+  const [activeTab, setActiveTab] = useState('list'); // 'list' or 'pdf'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest', 'oldest', 'dateAsc', 'dateDesc'
+  const [showFilters, setShowFilters] = useState(false);
+
+  const isPremium = checkPremiumStatus();
+  const userPlan = getUserPlan();
+  const isFreePlan = userPlan === PLAN_TYPES.FREE;
+
+  const sampleLogs = [
+    {
+      date: "2025/01/10",
+      time: "19:30",
+      category: "モラハラ",
+      location: "自宅",
+      content: "（サンプル）夕食時に暴言を吐かれた。",
+      attachments: [{ type: "audio", name: "rec001.mp3" }],
+    },
+  ];
+
+  const effectiveLogs = logs && logs.length > 0 ? logs : sampleLogs;
+
+  // カテゴリ一覧を取得
+  const categories = useMemo(() => {
+    const cats = new Set();
+    effectiveLogs.forEach(log => {
+      if (log.category) cats.add(log.category);
+    });
+    return Array.from(cats).sort();
+  }, [effectiveLogs]);
+
+  // 日付をDateオブジェクトに変換するヘルパー
+  // YYYY/MM/DD または YYYY-MM-DD 形式に対応
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    // YYYY-MM-DD形式（HTML5 date input）を処理
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      }
+    }
+    // YYYY/MM/DD形式（ログの保存形式）を処理
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return null;
+  };
+
+  // フィルタリングとソート
+  const filteredAndSortedLogs = useMemo(() => {
+    let filtered = [...effectiveLogs];
+
+    // フリーワード検索
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(log => {
+        const content = (log.content || '').toLowerCase();
+        const location = (log.location || '').toLowerCase();
+        const category = (log.category || '').toLowerCase();
+        const date = (log.date || '').toLowerCase();
+        const time = (log.time || '').toLowerCase();
+        return content.includes(query) || 
+               location.includes(query) || 
+               category.includes(query) ||
+               date.includes(query) ||
+               time.includes(query);
+      });
+    }
+
+    // カテゴリフィルター
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(log => log.category === selectedCategory);
+    }
+
+    // 日付範囲フィルター
+    if (dateFrom) {
+      const fromDate = parseDate(dateFrom);
+      if (fromDate) {
+        // 日付のみで比較（時刻を無視）
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(log => {
+          const logDate = parseDate(log.date);
+          if (!logDate) return false;
+          logDate.setHours(0, 0, 0, 0);
+          return logDate >= fromDate;
+        });
+      }
+    }
+    if (dateTo) {
+      const toDate = parseDate(dateTo);
+      if (toDate) {
+        // 日付のみで比較（時刻を無視）
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(log => {
+          const logDate = parseDate(log.date);
+          if (!logDate) return false;
+          logDate.setHours(0, 0, 0, 0);
+          return logDate <= toDate;
+        });
+      }
+    }
+
+    // ソート
+    filtered.sort((a, b) => {
+      const dateA = parseDate(a.date) || new Date(0);
+      const dateB = parseDate(b.date) || new Date(0);
+      const timeA = a.time || '';
+      const timeB = b.time || '';
+      const timestampA = a.timestamp || a.createdAt || 0;
+      const timestampB = b.timestamp || b.createdAt || 0;
+
+      switch (sortOrder) {
+        case 'newest':
+          // タイムスタンプで新しい順（デフォルト）
+          return timestampB - timestampA;
+        case 'oldest':
+          // タイムスタンプで古い順
+          return timestampA - timestampB;
+        case 'dateDesc':
+          // 日付+時刻で新しい順
+          if (dateB.getTime() !== dateA.getTime()) {
+            return dateB.getTime() - dateA.getTime();
+          }
+          return timeB.localeCompare(timeA);
+        case 'dateAsc':
+          // 日付+時刻で古い順
+          if (dateA.getTime() !== dateB.getTime()) {
+            return dateA.getTime() - dateB.getTime();
+          }
+          return timeA.localeCompare(timeB);
+        default:
+          return timestampB - timestampA;
+      }
+    });
+
+    return filtered;
+  }, [effectiveLogs, searchQuery, selectedCategory, dateFrom, dateTo, sortOrder]);
+
+  const statementData = useMemo(
+    () => {
+      const baseData = buildStatementDataFromLogs({ logs: effectiveLogs, userProfile });
+      return {
+        ...baseData,
+        isFreePlan,
+        watermark: isFreePlan ? FREE_PLAN_LIMITS.PDF_WATERMARK : undefined,
+      };
+    },
+    [effectiveLogs, userProfile, isFreePlan]
+  );
+
+  // 無料プランでは1ページ目のみのため、ファイル名に「サンプル」を追加
+  const fileName = isFreePlan 
+    ? `陳述書_サンプル_${new Date().toLocaleDateString('ja-JP').replaceAll('/', '-')}.pdf`
+    : `陳述書_${new Date().toLocaleDateString('ja-JP').replaceAll('/', '-')}.pdf`;
+
+  // ログのインデックスを取得（フィルタリング後のインデックスから元のインデックスに変換）
+  const getOriginalIndex = (filteredIndex) => {
+    const filteredLog = filteredAndSortedLogs[filteredIndex];
+    return effectiveLogs.findIndex(log => log === filteredLog);
+  };
+
+  return (
+    <div className="pb-24">
+      {/* タブ切り替え */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 mb-4">
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`flex-1 py-3 text-center font-bold text-sm border-b-2 transition-colors ${
+              activeTab === 'list'
+                ? 'border-slate-900 text-slate-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <FileText size={16} className="inline-block mr-1" />
+            ログ一覧 ({filteredAndSortedLogs.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('pdf')}
+            className={`flex-1 py-3 text-center font-bold text-sm border-b-2 transition-colors ${
+              activeTab === 'pdf'
+                ? 'border-slate-900 text-slate-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <FileText size={16} className="inline-block mr-1" />
+            PDF出力
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'list' ? (
+        <div className="p-4 space-y-4">
+          {/* 検索バー */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Search size={16} className="text-gray-400" />
+              <input
+                type="text"
+                placeholder="フリーワード検索（内容、場所、カテゴリなど）"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              />
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2 rounded-lg border transition-colors ${
+                  showFilters
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
+                }`}
+                title="フィルター"
+              >
+                <Filter size={16} />
+              </button>
+            </div>
+
+            {/* フィルターオプション */}
+            {showFilters && (
+              <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+                {/* カテゴリフィルター */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 mb-1 block">カテゴリ</label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  >
+                    <option value="all">すべて</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 日付範囲 */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 mb-1 block">開始日</label>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 mb-1 block">終了日</label>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                    />
+                  </div>
+                </div>
+
+                {/* ソート */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 mb-1 block flex items-center gap-1">
+                    <ArrowUpDown size={12} />
+                    並び替え
+                  </label>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value)}
+                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  >
+                    <option value="newest">新しい順（記録順）</option>
+                    <option value="oldest">古い順（記録順）</option>
+                    <option value="dateDesc">日付：新しい順</option>
+                    <option value="dateAsc">日付：古い順</option>
+                  </select>
+                </div>
+
+                {/* フィルターリセット */}
+                {(searchQuery || selectedCategory !== 'all' || dateFrom || dateTo) && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategory('all');
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    className="w-full text-xs text-gray-600 hover:text-gray-800 underline"
+                  >
+                    フィルターをリセット
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ログ一覧 */}
+          {filteredAndSortedLogs.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">
+              <FileText size={48} className="mx-auto mb-2 opacity-20" />
+              <p>該当するログがありません。</p>
+              {(searchQuery || selectedCategory !== 'all' || dateFrom || dateTo) && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('all');
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                  className="mt-4 text-sm text-pink-600 hover:text-pink-700 underline"
+                >
+                  フィルターをリセット
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredAndSortedLogs.map((log, idx) => {
+              const originalIdx = getOriginalIndex(idx);
+              return (
+                <div
+                  key={idx}
+                  onClick={() => onLogClick(log, originalIdx >= 0 ? originalIdx : idx)}
+                  className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-900 relative cursor-pointer hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      {log.date} {log.time}
+                    </span>
+                    <span
+                      className={`text-xs font-bold px-2 py-1 rounded text-white
+                        ${log.category === '暴力・DV' ? 'bg-red-600' :
+                          log.category === '不貞・浮気' ? 'bg-purple-600' :
+                          log.category === 'モラハラ' ? 'bg-orange-500' :
+                          log.category === '通院・診断書' ? 'bg-rose-600' :
+                          'bg-gray-500'
+                        }`}
+                    >
+                      {log.category}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-3">{log.content}</p>
+
+                  {log.comments && log.comments.length > 0 && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+                      <MessageCircle size={12} />
+                      <span>{log.comments.length}件のコメント</span>
+                    </div>
+                  )}
+
+                  {log.medical && (
+                    <div className="mt-3 bg-rose-50 border border-rose-200 rounded-lg p-3">
+                      <div className="text-[10px] font-bold text-rose-800 mb-1">
+                        医療記録（通院・診断書）
+                      </div>
+                      <div className="text-xs text-rose-900 space-y-1">
+                        {(log.medical.visitType || log.medical.facility || log.medical.department) && (
+                          <div className="text-[11px]">
+                            {log.medical.visitType ? `種別: ${log.medical.visitType}` : ''}
+                            {log.medical.facility ? ` / 医療機関: ${log.medical.facility}` : ''}
+                            {log.medical.department ? ` / 診療科: ${log.medical.department}` : ''}
+                          </div>
+                        )}
+                        {log.medical.diagnosis && <div className="text-[11px]">診断名/所見: {log.medical.diagnosis}</div>}
+                        {Array.isArray(log.medical.proofs) && log.medical.proofs.length > 0 && (
+                          <div className="text-[11px]">資料: {log.medical.proofs.join('、')}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {log.attachments && log.attachments.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {log.attachments.map((att, i) => (
+                        <span
+                          key={i}
+                          className={`text-[10px] px-2 py-1 rounded flex items-center gap-1 border
+                            ${att.type === 'image' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                              att.type === 'audio' ? 'bg-green-50 text-green-700 border-green-100' :
+                              'bg-pink-50 text-pink-700 border-pink-100'
+                            }`}
+                        >
+                          {att.type === 'image' && <ImageIcon size={12} />}
+                          {att.type === 'audio' && <Mic size={12} />}
+                          {att.type === 'video' && <Video size={12} />}
+                          {att.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        /* PDF出力セクション */
+        <div className="p-4">
+          {effectiveLogs.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">
+              <FileText size={48} className="mx-auto mb-2 opacity-20" />
+              <p>PDF出力するには、まずログを記録してください。</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+              <h2 className="font-bold text-lg mb-2 text-slate-900 flex items-center gap-2">
+                <FileText size={20} /> 提出用PDF（陳述書）
+              </h2>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                記録されたデータを、裁判所提出用の<strong>陳述書フォーマット</strong>として出力します。
+                <br />
+                <span className="text-pink-600">※表示中のプレビューと実際のPDFは同一のフォーマットです。</span>
+              </p>
+
+              {/* 無料プラン時の制限通知 */}
+              {isFreePlan && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg mb-4">
+                  <div className="flex items-start gap-2">
+                    <Crown size={16} className="text-yellow-600 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-yellow-900 mb-1">無料プランの制限</div>
+                      <div className="text-xs text-yellow-800 leading-relaxed">
+                        無料プランでは、<strong>1ページ目のみ</strong>出力可能です。また、PDFには「<strong>SAMPLE</strong>」という透かしが入ります。
+                        <br />
+                        全ページ出力・透かしなしの正式版をご希望の場合は、プレミアムプランへのアップグレードが必要です。
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PDFプレビュー */}
+              <div className="bg-white border border-gray-300 shadow-md overflow-hidden rounded-xl mb-4" style={{ height: '400px' }}>
+                <BlobProvider document={<StatementDocument data={statementData} />}>
+                  {({ url, loading, error }) => {
+                    if (loading) {
+                      return <div className="p-6 text-xs text-gray-500 h-full flex items-center justify-center">プレビューを生成中...</div>;
+                    }
+                    if (error || !url) {
+                      return <div className="p-6 text-xs text-red-600 h-full flex items-center justify-center">プレビューの生成に失敗しました。</div>;
+                    }
+                    return (
+                      <iframe
+                        title="陳述書プレビュー"
+                        src={url}
+                        className="w-full h-full border-0"
+                      />
+                    );
+                  }}
+                </BlobProvider>
+              </div>
+
+              {/* PDFダウンロードボタン */}
+              <div className="mt-4">
+                <PDFDownloadLink
+                  document={<StatementDocument data={statementData} />}
+                  fileName={fileName}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded shadow-lg flex items-center justify-center gap-2"
+                >
+                  {({ loading }) => (
+                    <>
+                      <FileText size={18} /> {loading ? "PDF生成中…" : isFreePlan ? "PDFファイルを出力する（1ページ目・透かし付き）" : "PDFファイルを出力する"}
+                    </>
+                  )}
+                </PDFDownloadLink>
+                <p className="text-[10px] text-center text-gray-500 mt-2">
+                  {isFreePlan 
+                    ? "※無料プランでは1ページ目のみ、透かし付きで出力されます。"
+                    : "※端末にPDFとして保存されます。コンビニ等で印刷可能です。"
+                  }
+                </p>
+                {isFreePlan && onShowPremium && (
+                  <div className="mt-3">
+                    <button
+                      onClick={onShowPremium}
+                      className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+                    >
+                      <Crown size={14} /> プレミアムプランで全ページ出力・透かしなし版を利用する
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
   const [category, setCategory] = useState("モラハラ");
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
@@ -2315,15 +3217,26 @@ const AddLogView = ({ onSave, onCancel }) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // 容量制限チェック（無料版のみ）
-    if (!isPremium) {
-      if (attachments.length >= MAX_ATTACHMENTS_FREE) {
-        alert(`無料版では最大${MAX_ATTACHMENTS_FREE}個まで添付できます。プレミアムプランで無制限になります。`);
+    const userPlan = getUserPlan();
+    
+    // 無料プラン：写真のみ許可
+    if (userPlan === PLAN_TYPES.FREE) {
+      if (type !== 'image') {
+        alert('無料プランでは写真のみ添付できます。録音・動画はプレミアムプランでご利用いただけます。');
+        e.target.value = ''; // ファイル選択をリセット
         return;
       }
+      
+      if (attachments.length >= FREE_PLAN_LIMITS.MAX_ATTACHMENTS) {
+        alert(`無料版では最大${FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで添付できます。プレミアムプランで無制限になります。`);
+        e.target.value = '';
+        return;
+      }
+      
       const fileSizeMB = file.size / (1024 * 1024);
-      if (fileSizeMB > MAX_TOTAL_SIZE_MB_FREE) {
-        alert(`無料版では1ファイルあたり最大${MAX_TOTAL_SIZE_MB_FREE}MBまでです。プレミアムプランで無制限になります。`);
+      if (fileSizeMB > FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB) {
+        alert(`無料版では1ファイルあたり最大${FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまでです。プレミアムプランで無制限になります。`);
+        e.target.value = '';
         return;
       }
     }
@@ -2650,14 +3563,65 @@ const AddLogView = ({ onSave, onCancel }) => {
                 )}
                 
                 <div className="flex gap-4 mb-2">
-                    <label className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"><ImageIcon size={20} className="text-gray-400 mb-1"/><span className="text-[10px] text-gray-500">写真</span><input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, 'image')} /></label>
-                    <label className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"><Mic size={20} className="text-gray-400 mb-1"/><span className="text-[10px] text-gray-500">録音</span><input type="file" accept="audio/*" className="hidden" onChange={(e) => handleFileSelect(e, 'audio')} /></label>
-                    <label className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"><Video size={20} className="text-gray-400 mb-1"/><span className="text-[10px] text-gray-500">動画</span><input type="file" accept="video/*" className="hidden" onChange={(e) => handleFileSelect(e, 'video')} /></label>
+                    <label className="flex flex-col items-center justify-center w-16 h-16 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100">
+                      <ImageIcon size={20} className="text-gray-400 mb-1"/>
+                      <span className="text-[10px] text-gray-500">写真</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, 'image')} />
+                    </label>
+                    <label 
+                      className={`flex flex-col items-center justify-center w-16 h-16 border rounded-lg relative ${isPremium ? 'bg-gray-50 border-gray-200 cursor-pointer hover:bg-gray-100' : 'bg-gray-50 border-yellow-300 cursor-pointer hover:bg-yellow-50'}`}
+                      onClick={!isPremium ? (e) => {
+                        e.preventDefault();
+                        if (onShowPremium) {
+                          onShowPremium();
+                        } else {
+                          alert('録音機能はプレミアムプランでご利用いただけます。');
+                        }
+                      } : undefined}
+                    >
+                      <div className="relative">
+                        <Mic size={20} className="text-gray-400 mb-1"/>
+                        {!isPremium && (
+                          <Crown size={10} className="absolute -top-1 -right-1 text-yellow-500 fill-yellow-500" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-500">録音</span>
+                      {isPremium && (
+                        <input type="file" accept="audio/*" className="hidden" onChange={(e) => handleFileSelect(e, 'audio')} />
+                      )}
+                    </label>
+                    <label 
+                      className={`flex flex-col items-center justify-center w-16 h-16 border rounded-lg relative ${isPremium ? 'bg-gray-50 border-gray-200 cursor-pointer hover:bg-gray-100' : 'bg-gray-50 border-yellow-300 cursor-pointer hover:bg-yellow-50'}`}
+                      onClick={!isPremium ? (e) => {
+                        e.preventDefault();
+                        if (onShowPremium) {
+                          onShowPremium();
+                        } else {
+                          alert('動画機能はプレミアムプランでご利用いただけます。');
+                        }
+                      } : undefined}
+                    >
+                      <div className="relative">
+                        <Video size={20} className="text-gray-400 mb-1"/>
+                        {!isPremium && (
+                          <Crown size={10} className="absolute -top-1 -right-1 text-yellow-500 fill-yellow-500" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-500">動画</span>
+                      {isPremium && (
+                        <input type="file" accept="video/*" className="hidden" onChange={(e) => handleFileSelect(e, 'video')} />
+                      )}
+                    </label>
                 </div>
+                {!isPremium && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-[10px] text-blue-800 mb-2">
+                    <span className="font-bold">無料プラン:</span> 写真のみ添付可能（最大{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個、1ファイルあたり{FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまで）。録音・動画はプレミアムプランでご利用いただけます。
+                  </div>
+                )}
                 {!isPremium && attachments.length > 0 && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-[10px] text-yellow-800">
                     <Crown size={10} className="inline mr-1" />
-                    無料版: {attachments.length}/{MAX_ATTACHMENTS_FREE}個まで。プレミアムプランで無制限になります。
+                    無料版: {attachments.length}/{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで。プレミアムプランで無制限になります。
                   </div>
                 )}
                 {attachments.length > 0 && (
@@ -2926,9 +3890,13 @@ const PremiumPlanView = ({ user, onClose }) => {
                 <CheckCircle2 size={16} className="text-green-500" />
                 <span className="text-gray-700">広告非表示</span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs">
                 <CheckCircle2 size={16} className="text-green-500" />
                 <span className="text-gray-700">カモフラージュアイコン変更（天気予報、ニュースなど）</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <CheckCircle2 size={16} className="text-green-500" />
+                <span className="text-gray-700">PDF全ページ出力・透かしなし（陳述書の正式版）</span>
               </div>
             </div>
           </div>
@@ -2957,6 +3925,10 @@ const PremiumPlanView = ({ user, onClose }) => {
                 <CheckCircle2 size={14} className="text-green-500" />
                 <span>カモフラージュアイコン変更（天気予報、ニュースなど）</span>
               </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-500" />
+                <span>PDF全ページ出力・透かしなし（陳述書の正式版）</span>
+              </div>
             </div>
           </div>
 
@@ -2984,6 +3956,8 @@ const MainApp = ({ onLock, user, onLogout }) => {
   const [view, setView] = useState("dashboard"); // dashboard, timeline, add, messages, board, export, safety, lifeSupport, premium
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [selectedLogIndex, setSelectedLogIndex] = useState(null);
 
   useEffect(() => {
     try {
@@ -3001,6 +3975,25 @@ const MainApp = ({ onLock, user, onLogout }) => {
     setLogs(updatedLogs);
       localStorage.setItem("riko_logs", JSON.stringify(updatedLogs));
       setView("timeline");
+  };
+
+  const updateLog = (updatedLog) => {
+    if (selectedLogIndex === null) return;
+    const updatedLogs = [...logs];
+    updatedLogs[selectedLogIndex] = updatedLog;
+    setLogs(updatedLogs);
+    localStorage.setItem("riko_logs", JSON.stringify(updatedLogs));
+    setSelectedLog(updatedLog);
+  };
+
+  const handleLogClick = (log, index) => {
+    setSelectedLog(log);
+    setSelectedLogIndex(index);
+  };
+
+  const handleCloseLogDetail = () => {
+    setSelectedLog(null);
+    setSelectedLogIndex(null);
   };
 
   if (error) {
@@ -3036,6 +4029,13 @@ const MainApp = ({ onLock, user, onLogout }) => {
           <button onClick={() => setView('safety')} className="bg-slate-800 hover:bg-slate-700 p-2 rounded-full text-xs font-bold flex items-center gap-1 px-3 text-blue-200 border border-slate-700">
             <LifeBuoy size={14} /> Help
           </button>
+          <button 
+            onClick={onLogout} 
+            className="bg-slate-700 hover:bg-slate-600 p-2 rounded-full text-xs font-bold flex items-center gap-1 px-3 text-white border border-slate-600"
+            title="ログアウト"
+          >
+            <LogOut size={14} /> ログアウト
+          </button>
           <button onClick={onLock} className="bg-red-600 hover:bg-red-700 p-2 rounded-full text-xs font-bold flex items-center gap-1 px-3 text-white">
             <Lock size={14} /> 緊急ロック
           </button>
@@ -3044,16 +4044,24 @@ const MainApp = ({ onLock, user, onLogout }) => {
 
       <div className="flex-1 overflow-y-auto overscroll-none min-h-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 92px)' }}>
         {view === "dashboard" && <DashboardView logs={logs} userProfile={user} onShowDiagnosis={() => setView("diagnosis")} onShowLifeSupport={() => setView("lifeSupport")} onShowPremium={() => setView("premium")} />}
-        {view === "timeline" && <TimelineView logs={logs} />}
-        {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} />}
+        {view === "timeline" && <TimelineView logs={logs} onLogClick={handleLogClick} userProfile={user} onShowPremium={() => setView("premium")} />}
+        {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
         {view === "messages" && <MessagesView />}
         {view === "board" && <BoardView />}
         {view === "safety" && <SafetyView />}
-        {view === "export" && <ExportView logs={logs} userProfile={user} />}
+        {view === "export" && <ExportView logs={logs} userProfile={user} onShowPremium={() => setView("premium")} />}
         {view === "diagnosis" && <CompensationDiagnosisView logs={logs} onClose={() => setView("dashboard")} />}
         {view === "lifeSupport" && <LifeSupportView />}
         {view === "premium" && <PremiumPlanView user={user} onClose={() => setView("dashboard")} />}
       </div>
+
+      {selectedLog && (
+        <LogDetailView
+          log={selectedLog}
+          onClose={handleCloseLogDetail}
+          onUpdate={updateLog}
+        />
+      )}
 
       <nav className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-gray-200 flex justify-around py-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }}>
         <NavBtn icon={Database} label="ホーム" active={view === "dashboard"} onClick={() => setView("dashboard")} />
@@ -3061,7 +4069,6 @@ const MainApp = ({ onLock, user, onLogout }) => {
         <NavBtn icon={Plus} label="記録" active={view === "add"} onClick={() => setView("add")} isMain />
         <NavBtn icon={Mail} label="受信箱" active={view === "messages"} onClick={() => setView("messages")} />
         <NavBtn icon={MessageSquare} label="掲示板" active={view === "board"} onClick={() => setView("board")} />
-        <NavBtn icon={Send} label="提出" active={view === "export"} onClick={() => setView("export")} />
       </nav>
     </div>
   );
