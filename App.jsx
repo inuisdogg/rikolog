@@ -11,6 +11,7 @@ import {
   MapPin, 
   Camera, 
   LogOut,
+  Send,
   Mic,
   Video,
   Image as ImageIcon,
@@ -1873,28 +1874,26 @@ const ExportView = ({ logs, userProfile }) => {
         <span className="text-pink-600">※表示中のプレビューと実際のPDFは同一のフォーマットです。</span>
       </p>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-        <div className="text-xs font-bold text-gray-500 mb-2">プレビュー</div>
+      {/* PDFプレビュー（本番もこの体裁を常用する） */}
+      <div className="bg-white border border-gray-300 shadow-md overflow-hidden rounded-xl">
         <BlobProvider document={<StatementDocument data={statementData} />}>
-                    {({ url, loading, error }) => {
-            if (loading) return <div className="text-xs text-gray-500">PDFを生成中…</div>;
-            if (error || !url) return <div className="text-xs text-red-600">プレビューの生成に失敗しました。</div>;
-                        return (
-              <a
-                href={url}
-            target="_blank" 
-            rel="noopener noreferrer"
-                className="inline-block bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-lg text-xs"
-              >
-                プレビューを開く
-              </a>
+          {({ url, loading, error }) => {
+            if (loading) {
+              return <div className="p-6 text-xs text-gray-500">プレビューを生成中...</div>;
+            }
+            if (error || !url) {
+              return <div className="p-6 text-xs text-red-600">プレビューの生成に失敗しました。</div>;
+            }
+            return (
+              <iframe
+                title="陳述書プレビュー"
+                src={url}
+                className="w-full h-[600px]"
+              />
             );
           }}
         </BlobProvider>
-        <div className="text-[10px] text-gray-400 mt-2">
-          ※iPhoneは「開く」→共有→「ファイルに保存」で保存できます。
-            </div>
-          </div>
+      </div>
 
       <div className="mt-4">
         <PDFDownloadLink
@@ -3062,7 +3061,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
         <NavBtn icon={Plus} label="記録" active={view === "add"} onClick={() => setView("add")} isMain />
         <NavBtn icon={Mail} label="受信箱" active={view === "messages"} onClick={() => setView("messages")} />
         <NavBtn icon={MessageSquare} label="掲示板" active={view === "board"} onClick={() => setView("board")} />
-        <NavBtn icon={LogOut} label="提出" active={view === "export"} onClick={() => setView("export")} />
+        <NavBtn icon={Send} label="提出" active={view === "export"} onClick={() => setView("export")} />
       </nav>
     </div>
   );
