@@ -299,11 +299,17 @@ const CalculatorMode = ({ onUnlock }) => {
   ];
 
   return (
-    <div className="h-screen w-full flex flex-col bg-black text-white p-4 font-sans lg:max-w-md lg:h-auto lg:min-h-[600px] lg:mx-auto lg:shadow-2xl lg:rounded-xl lg:my-8">
-      <div className="flex-1 flex items-end justify-end p-6 text-6xl font-light font-mono break-all lg:min-h-[200px]">
+    <div className="h-full w-full flex flex-col bg-black text-white font-sans lg:max-w-md lg:h-auto lg:min-h-[600px] lg:mx-auto lg:shadow-2xl lg:rounded-xl lg:my-8 lg:p-4" style={{ minHeight: '100dvh' }}>
+      <div className="flex-1 flex items-end justify-end p-6 text-6xl font-light font-mono break-all lg:min-h-[200px] min-h-0 overflow-hidden">
         {display}
       </div>
-      <div className="grid grid-cols-4 gap-4 h-3/5 pb-8 lg:h-auto lg:min-h-[400px]">
+      <div 
+        className="grid grid-cols-4 gap-4 flex-shrink-0 px-4 pb-4 lg:pb-8" 
+        style={{ 
+          paddingBottom: 'max(80px, calc(1rem + env(safe-area-inset-bottom) + 3rem))',
+          minHeight: 'fit-content'
+        }}
+      >
         {buttons.map((btn, i) => (
           <button 
             key={i}
@@ -328,6 +334,7 @@ const AuthScreen = ({ onLogin }) => {
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [rememberMe, setRememberMe] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -335,6 +342,123 @@ const AuthScreen = ({ onLogin }) => {
     targetDate: "",
     situation: ""
   });
+
+  // WebAuthn APIが利用可能かチェック
+  const isWebAuthnAvailable = () => {
+    // 基本的なチェック
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      console.log('WebAuthnチェック: windowまたはnavigatorが未定義');
+      return false;
+    }
+
+    // PublicKeyCredentialの存在チェック
+    if (!('PublicKeyCredential' in window)) {
+      console.log('WebAuthnチェック: PublicKeyCredentialが存在しません');
+      return false;
+    }
+
+    // navigator.credentialsの存在チェック
+    if (!('credentials' in navigator)) {
+      console.log('WebAuthnチェック: navigator.credentialsが存在しません');
+      return false;
+    }
+
+    // create/getメソッドの存在チェック
+    if (!('create' in navigator.credentials) || !('get' in navigator.credentials)) {
+      console.log('WebAuthnチェック: credentials.createまたはgetが存在しません');
+      return false;
+    }
+
+    // iOS Safariの特別なチェック
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
+    if (isIOS) {
+      // iOS 14以降でWebAuthnがサポートされている
+      // ただし、HTTPS環境が必要（localhostは例外）
+      const isSecureContext = window.isSecureContext || 
+                               window.location.protocol === 'https:' ||
+                               window.location.hostname === 'localhost' ||
+                               window.location.hostname === '127.0.0.1';
+      
+      if (!isSecureContext) {
+        console.log('WebAuthnチェック: iOSではHTTPS環境が必要です', {
+          protocol: window.location.protocol,
+          hostname: window.location.hostname
+        });
+        return false;
+      }
+    }
+
+    console.log('WebAuthnチェック: 利用可能です', {
+      isIOS,
+      isSecureContext: window.isSecureContext,
+      protocol: window.location.protocol,
+      hostname: window.location.hostname
+    });
+
+    return true;
+  };
+
+  // WebAuthn認証情報を登録
+  const registerWebAuthn = async (userId, email) => {
+    if (!isWebAuthnAvailable()) {
+      throw new Error("このデバイスは生体認証に対応していません");
+    }
+
+    try {
+      // ランダムなチャレンジを生成
+      const challenge = new Uint8Array(32);
+      crypto.getRandomValues(challenge);
+
+      // WebAuthn認証情報を作成
+      const publicKeyCredentialCreationOptions = {
+        challenge: challenge,
+        rp: {
+          name: "Riko-Log",
+          id: window.location.hostname,
+        },
+        user: {
+          id: new TextEncoder().encode(userId),
+          name: email,
+          displayName: email,
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" }, // ES256
+          { alg: -257, type: "public-key" }, // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform", // プラットフォーム認証器（FaceID/TouchID）
+          userVerification: "required",
+        },
+        timeout: 60000,
+        attestation: "direct"
+      };
+
+      const credential = await navigator.credentials.create({
+        publicKey: publicKeyCredentialCreationOptions
+      });
+
+      // 認証情報をlocalStorageに保存
+      const credentialData = {
+        id: credential.id,
+        rawId: Array.from(new Uint8Array(credential.rawId)),
+        response: {
+          attestationObject: Array.from(new Uint8Array(credential.response.attestationObject)),
+          clientDataJSON: Array.from(new Uint8Array(credential.response.clientDataJSON)),
+        },
+        userId: userId,
+        email: email,
+        registeredAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(`webauthn_credential_${userId}`, JSON.stringify(credentialData));
+      return credentialData;
+    } catch (error) {
+      console.error("WebAuthn登録エラー:", error);
+      throw error;
+    }
+  };
 
   const handleSubmit = async () => {
     try {
@@ -358,26 +482,55 @@ const AuthScreen = ({ onLogin }) => {
           password: formData.password,
         });
 
-        if (authError) throw authError;
+        if (authError) {
+          console.error("新規登録エラー:", authError);
+          throw authError;
+        }
 
         if (!authData.user) {
           throw new Error("ユーザー作成に失敗しました");
         }
 
-        // ユーザー情報をusersテーブルに保存
-        await createUser(authData.user.id, {
-          email: formData.email,
-          reason: formData.reason,
-          targetDate: formData.targetDate || null,
-          situation: formData.situation || "",
-        });
+        // セッションを確認（メール確認が無効な場合はセッションが確立される）
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          // セッションが確立されている場合、usersテーブルに保存
+          try {
+            await createUser(authData.user.id, {
+              email: formData.email,
+              reason: formData.reason,
+              targetDate: formData.targetDate || null,
+              situation: formData.situation || "",
+            });
+          } catch (createError) {
+            // ユーザーが既に存在する場合は無視（二重登録防止）
+            if (createError.code !== '23505') { // 23505は重複エラー
+              throw createError;
+            }
+          }
 
-        // ユーザー情報を取得
-        const userProfile = await getUser(authData.user.id);
-        if (userProfile) {
-          onLogin({ ...userProfile, id: authData.user.id });
+          // ユーザー情報を取得
+          const userProfile = await getUser(authData.user.id);
+          if (userProfile) {
+            // WebAuthn認証情報が未登録の場合、自動的に登録を試みる
+            if (isWebAuthnAvailable()) {
+              const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
+              if (!existingCredential) {
+                // バックグラウンドで登録を試みる（エラーは無視）
+                registerWebAuthn(authData.user.id, formData.email).catch(err => {
+                  console.log("WebAuthn登録スキップ:", err.message);
+                });
+              }
+            }
+            onLogin({ ...userProfile, id: authData.user.id });
+          } else {
+            throw new Error("ユーザー情報の取得に失敗しました");
+          }
         } else {
-          throw new Error("ユーザー情報の取得に失敗しました");
+          // メール確認が必要な場合、またはセッションが確立されていない場合
+          // ユーザーは作成されているので、ログイン画面に戻るように案内
+          throw new Error("登録は完了しましたが、ログインにはメール確認が必要です。メールを確認してログインしてください。");
         }
       } else {
         // ログイン
@@ -386,15 +539,45 @@ const AuthScreen = ({ onLogin }) => {
           password: formData.password,
         });
 
-        if (authError) throw authError;
+        if (authError) {
+          console.error("ログインエラー:", authError);
+          throw authError;
+        }
 
         if (!authData.user) {
           throw new Error("ログインに失敗しました");
         }
 
+        // 30日間保存がチェックされている場合、セッション情報を保存
+        if (rememberMe) {
+          try {
+            const sessionData = {
+              userId: authData.user.id,
+              email: formData.email,
+              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30日後
+            };
+            localStorage.setItem('riko_remember_me', JSON.stringify(sessionData));
+          } catch (err) {
+            console.error("セッション保存エラー:", err);
+          }
+        } else {
+          // チェックが外れている場合は保存情報を削除
+          localStorage.removeItem('riko_remember_me');
+        }
+
         // ユーザー情報を取得
         const userProfile = await getUser(authData.user.id);
         if (userProfile) {
+          // WebAuthn認証情報が未登録の場合、自動的に登録を試みる
+          if (isWebAuthnAvailable()) {
+            const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
+            if (!existingCredential) {
+              // バックグラウンドで登録を試みる（エラーは無視）
+              registerWebAuthn(authData.user.id, formData.email).catch(err => {
+                console.log("WebAuthn登録スキップ:", err.message);
+              });
+            }
+          }
           onLogin({ ...userProfile, id: authData.user.id });
         } else {
           throw new Error("ユーザー情報が見つかりません");
@@ -402,9 +585,76 @@ const AuthScreen = ({ onLogin }) => {
       }
     } catch (error) {
       console.error("認証エラー:", error);
-      setError(error.message || "認証処理中にエラーが発生しました。もう一度お試しください。");
+      
+      // エラーメッセージを日本語に変換
+      let errorMessage = "認証処理中にエラーが発生しました。もう一度お試しください。";
+      
+      if (error.message) {
+        const message = error.message.toLowerCase();
+        if (message.includes("invalid login credentials") || message.includes("invalid credentials")) {
+          errorMessage = "メールアドレスまたはパスワードが正しくありません。\n\n※メール確認を無効化した後、既存のユーザーはSupabase Dashboardで手動で確認済みにする必要がある場合があります。";
+        } else if (message.includes("email not confirmed")) {
+          errorMessage = "メールアドレスの確認が必要です。メールを確認してください。\n\n※メール確認を無効化した場合は、Supabase Dashboardでユーザーを確認済みにしてください。";
+        } else if (message.includes("user not found")) {
+          errorMessage = "ユーザーが見つかりません。新規登録を行ってください。";
+        } else if (message.includes("email already registered")) {
+          errorMessage = "このメールアドレスは既に登録されています。ログインしてください。";
+        } else if (message.includes("password")) {
+          errorMessage = "パスワードが正しくありません。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // WebAuthn認証情報で認証
+  const authenticateWebAuthn = async (userId) => {
+    if (!isWebAuthnAvailable()) {
+      throw new Error("このデバイスは生体認証に対応していません");
+    }
+
+    try {
+      // 保存された認証情報を取得
+      const savedCredential = localStorage.getItem(`webauthn_credential_${userId}`);
+      if (!savedCredential) {
+        throw new Error("登録された生体認証情報が見つかりません");
+      }
+
+      const credentialData = JSON.parse(savedCredential);
+
+      // ランダムなチャレンジを生成
+      const challenge = new Uint8Array(32);
+      crypto.getRandomValues(challenge);
+
+      // WebAuthn認証を実行
+      const publicKeyCredentialRequestOptions = {
+        challenge: challenge,
+        allowCredentials: [{
+          id: new Uint8Array(credentialData.rawId),
+          type: 'public-key',
+          transports: ['internal'], // プラットフォーム認証器のみ
+        }],
+        timeout: 60000,
+        userVerification: "required",
+      };
+
+      const assertion = await navigator.credentials.get({
+        publicKey: publicKeyCredentialRequestOptions
+      });
+
+      if (!assertion) {
+        throw new Error("認証がキャンセルされました");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("WebAuthn認証エラー:", error);
+      throw error;
     }
   };
 
@@ -412,21 +662,68 @@ const AuthScreen = ({ onLogin }) => {
     setIsBiometricLoading(true);
     setError(null);
     try {
-      // セッションを確認
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const userProfile = await getCurrentUser();
-        if (userProfile) {
-          onLogin({ ...userProfile, id: session.user.id });
+      // WebAuthn APIが利用可能かチェック
+      const isAvailable = isWebAuthnAvailable();
+      if (!isAvailable) {
+        // より詳細なエラーメッセージを表示
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isSecureContext = window.isSecureContext || 
+                               window.location.protocol === 'https:' ||
+                               window.location.hostname === 'localhost' ||
+                               window.location.hostname === '127.0.0.1';
+        
+        if (isIOS && !isSecureContext) {
+          setError("生体認証を使用するには、HTTPS環境でアクセスする必要があります。\n\n本番環境（Vercelなど）では動作します。");
         } else {
-          setError("ユーザー情報が見つかりません");
+          setError("このデバイスまたはブラウザは生体認証に対応していません。\n\n対応ブラウザ: Safari 14以降、Chrome、Edge");
         }
-      } else {
+        return;
+      }
+
+      // Supabaseセッションを確認
+      const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession();
+      
+      if (sessionCheckError || !session?.user?.id) {
         setError("セッションが見つかりません。まずはフォームからログインしてください。");
+        return;
+      }
+
+      const userId = session.user.id;
+
+      // WebAuthn認証を実行
+      await authenticateWebAuthn(userId);
+
+      // 認証成功後、既に取得したセッションを使用（再取得は不要）
+      // セッションは既に685行目で取得済みなので、そのまま使用
+      if (!session || !session.user) {
+        setError("セッションが無効です。再度ログインしてください。");
+        return;
+      }
+
+      const userProfile = await getCurrentUser();
+      if (userProfile) {
+        onLogin({ ...userProfile, id: session.user.id });
+      } else {
+        setError("ユーザー情報が見つかりません");
       }
     } catch (error) {
-      console.error("セッション復元エラー:", error);
-      setError("セッションの復元に失敗しました");
+      console.error("生体認証エラー:", error);
+      
+      let errorMessage = "生体認証に失敗しました";
+      if (error.message) {
+        if (error.message.includes("キャンセル")) {
+          errorMessage = "認証がキャンセルされました";
+        } else if (error.message.includes("対応していません")) {
+          errorMessage = error.message;
+        } else if (error.message.includes("見つかりません")) {
+          errorMessage = "生体認証が登録されていません。まずはフォームからログインしてください。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsBiometricLoading(false);
     }
@@ -457,12 +754,6 @@ const AuthScreen = ({ onLogin }) => {
           </div>
         )}
         
-          {!isRegister && (
-          <div className="bg-slate-50 p-2 sm:p-3 rounded text-[10px] sm:text-xs text-slate-600 mb-3 sm:mb-4 border border-slate-200">
-              <strong>ヒント:</strong><br/>
-              パスワードは6文字以上で入力してください
-            </div>
-          )}
 
           {!isRegister && (
           <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-100">
@@ -498,6 +789,21 @@ const AuthScreen = ({ onLogin }) => {
             value={formData.password}
             onChange={e => setFormData({...formData, password: e.target.value})}
           />
+
+          {!isRegister && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 text-pink-600 bg-gray-100 border-gray-300 rounded focus:ring-pink-500 focus:ring-2"
+              />
+              <label htmlFor="rememberMe" className="text-xs sm:text-sm text-gray-700 cursor-pointer">
+                30日間ログイン情報を保存する
+              </label>
+            </div>
+          )}
 
           {isRegister && (
           <div className="space-y-3 sm:space-y-4 pt-2 border-t border-gray-100 animate-fade-in">
@@ -664,8 +970,8 @@ const SafetyView = () => {
 };
 
 // --- AI慰謝料診断（単一フロー: 同意→質問→解析→結果） ---
-const CompensationDiagnosisView = ({ logs, onClose }) => {
-  const [step, setStep] = useState(0); // 0: Intro, 1..Q: Questions, Q+1: Loading, Q+2: PaymentGate, Q+3: Result
+const CompensationDiagnosisView = ({ logs, onClose, onShowPremium }) => {
+  const [step, setStep] = useState(0); // 0: Intro, 1..Q: Questions, Q+1: Loading, Q+2: Result
   const [consent, setConsent] = useState(false);
   const [answers, setAnswers] = useState({
     impact: "",
@@ -678,7 +984,7 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
     medical: "",
   });
   const [result, setResult] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState(null); // 'lawyer' or 'report'
+  const [showCTAPopup, setShowCTAPopup] = useState(false);
 
   const logCount = logs?.length || 0;
   const attachmentCount = (logs || []).reduce(
@@ -743,8 +1049,7 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
   const analyze = () => {
     const reasons = [];
 
-    // 証拠・記録量スコア
-    // 添付証拠に加え、医療記録（診断書・通院等）も“証拠力”として加点
+    // 証拠・記録量スコア（証拠が少ない場合は大幅に減点）
     const medicalEvidenceScore = (logs || []).reduce((sum, log) => {
       const med = log?.medical;
       if (!med) return sum;
@@ -758,84 +1063,140 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
       if (med.visitType === "入院") s += 8;
       return sum + s;
     }, 0);
-    const evidenceScore = Math.min(attachmentCount * 6, 35) + Math.min(medicalEvidenceScore, 20);
-    const logScore = Math.min(logCount * 2, 20);
+    
+    // 証拠スコア（証拠が少ない場合は低く評価）
+    const evidenceScore = Math.min(attachmentCount * 4, 30) + Math.min(medicalEvidenceScore, 15);
+    const logScore = Math.min(logCount * 1.5, 15);
+    const totalEvidenceScore = evidenceScore + logScore;
+    
     if (logCount >= 10) reasons.push("記録が一定量あり、事実の積み上げに有利です。");
     if (attachmentCount >= 3) reasons.push("音声/画像等の客観証拠があり、立証に有利です。");
     if (medicalEvidenceScore > 0) reasons.push("診断書・通院履歴等の医療資料は証拠力が強く、立証に有利です。");
 
-    // 中心事案別レンジ（万円）
-    let baseMin = 30;
-    let baseMax = 120;
+    // 中心事案別ベースレンジ（万円）- 証拠が少ない場合は低めに設定
+    let baseMin = 0;
+    let baseMax = 50;
     switch (answers.situation) {
       case "暴力（DV）":
-        baseMin = 80; baseMax = 250; reasons.push("DVは違法性が強く、慰謝料が上振れしやすい類型です。"); break;
+        baseMin = 50; baseMax = 200; reasons.push("DVは違法性が強く、慰謝料が上振れしやすい類型です。"); break;
       case "不貞（浮気）":
-        baseMin = 50; baseMax = 200; reasons.push("不貞は典型類型で、証拠次第でレンジが動きます。"); break;
+        baseMin = 30; baseMax = 150; reasons.push("不貞は典型類型で、証拠次第でレンジが動きます。"); break;
       case "暴言・威圧（強い支配）":
-        baseMin = 30; baseMax = 150; reasons.push("モラハラは継続性と具体性（反復・支配）が鍵です。"); break;
+        baseMin = 10; baseMax = 100; reasons.push("モラハラは継続性と具体性（反復・支配）が鍵です。"); break;
       case "生活費/経済（未払い等）":
-        baseMin = 20; baseMax = 120; reasons.push("生活費未払いは婚費/財産分与と絡むため、整理が重要です。"); break;
+        baseMin = 0; baseMax = 80; reasons.push("生活費未払いは婚費/財産分与と絡むため、整理が重要です。"); break;
       case "育児の放棄/妨害":
-        baseMin = 20; baseMax = 140; reasons.push("育児妨害は監護状況や子の負担が評価されやすいです。"); break;
+        baseMin = 10; baseMax = 100; reasons.push("育児妨害は監護状況や子の負担が評価されやすいです。"); break;
       default:
-        baseMin = 20; baseMax = 120; break;
+        baseMin = 0; baseMax = 60; break;
     }
 
-    // 影響（増額・勝率）
+    // 証拠が少ない場合はベースを下げる
+    if (totalEvidenceScore < 10) {
+      baseMin = Math.max(0, baseMin * 0.3);
+      baseMax = Math.max(baseMin, baseMax * 0.5);
+      reasons.push("証拠が少ない場合、慰謝料の認定は難しくなります。証拠収集が重要です。");
+    } else if (totalEvidenceScore < 20) {
+      baseMin = Math.max(0, baseMin * 0.6);
+      baseMax = Math.max(baseMin, baseMax * 0.75);
+    }
+
+    // 影響（増額）- 証拠がある場合のみ大きく評価
     let impactBonus = 0;
-    if (answers.impact === "通院・診断書がある") { impactBonus += 60; reasons.push("診断書がある場合、精神的損害の評価が上がりやすいです。"); }
-    else if (answers.impact === "不眠/強いストレスが続く") impactBonus += 25;
-    else if (answers.impact === "仕事/家事が回らない") impactBonus += 20;
-    else if (answers.impact === "子どもに大きな影響") impactBonus += 30;
+    if (answers.impact === "通院・診断書がある") {
+      impactBonus += totalEvidenceScore > 15 ? 40 : 20;
+      if (totalEvidenceScore > 15) reasons.push("診断書がある場合、精神的損害の評価が上がりやすいです。");
+    }
+    else if (answers.impact === "不眠/強いストレスが続く") impactBonus += totalEvidenceScore > 15 ? 15 : 5;
+    else if (answers.impact === "仕事/家事が回らない") impactBonus += totalEvidenceScore > 15 ? 12 : 3;
+    else if (answers.impact === "子どもに大きな影響") impactBonus += totalEvidenceScore > 15 ? 20 : 8;
+    else if (answers.impact === "まだ分からない/軽微") {
+      impactBonus -= 10;
+      baseMin = Math.max(0, baseMin * 0.7);
+      baseMax = Math.max(baseMin, baseMax * 0.8);
+    }
 
-    // 医療（裏付け）
+    // 医療（裏付け）- 証拠がある場合のみ大きく評価
     let medicalBonus = 0;
-    if (answers.medical === "診断書がある") medicalBonus += 30;
-    else if (answers.medical === "通院中（診断書は未）") medicalBonus += 15;
-    else if (answers.medical === "受診予定") medicalBonus += 8;
+    if (answers.medical === "診断書がある") {
+      medicalBonus += totalEvidenceScore > 15 ? 25 : 10;
+    }
+    else if (answers.medical === "通院中（診断書は未）") medicalBonus += totalEvidenceScore > 15 ? 12 : 5;
+    else if (answers.medical === "受診予定") medicalBonus += 3;
+    else if (answers.medical === "なし/不明") {
+      medicalBonus -= 5;
+    }
 
-    // 継続期間
+    // 継続期間（証拠がある場合のみ大きく評価）
     let durationBonus = 0;
-    if (answers.duration === "3年以上") durationBonus += 50;
-    else if (answers.duration === "1年以上") durationBonus += 35;
-    else if (answers.duration === "半年〜1年") durationBonus += 20;
-    else if (answers.duration === "3〜6ヶ月") durationBonus += 10;
-    else if (answers.duration === "1〜3ヶ月") durationBonus += 5;
+    if (answers.duration === "3年以上") durationBonus += totalEvidenceScore > 15 ? 30 : 10;
+    else if (answers.duration === "1年以上") durationBonus += totalEvidenceScore > 15 ? 20 : 8;
+    else if (answers.duration === "半年〜1年") durationBonus += totalEvidenceScore > 15 ? 12 : 5;
+    else if (answers.duration === "3〜6ヶ月") durationBonus += totalEvidenceScore > 15 ? 6 : 2;
+    else if (answers.duration === "1〜3ヶ月") durationBonus += totalEvidenceScore > 15 ? 3 : 1;
+    else if (answers.duration === "1ヶ月未満") {
+      durationBonus -= 5;
+      baseMin = Math.max(0, baseMin * 0.8);
+      baseMax = Math.max(baseMin, baseMax * 0.85);
+    }
 
-    // 婚姻期間
+    // 婚姻期間（証拠がある場合のみ大きく評価）
     let marriageBonus = 0;
-    if (answers.marriage === "20年以上") marriageBonus += 40;
-    else if (answers.marriage === "10年以上") marriageBonus += 30;
-    else if (answers.marriage === "5〜10年") marriageBonus += 20;
-    else if (answers.marriage === "3〜5年") marriageBonus += 10;
+    if (answers.marriage === "20年以上") marriageBonus += totalEvidenceScore > 15 ? 25 : 8;
+    else if (answers.marriage === "10年以上") marriageBonus += totalEvidenceScore > 15 ? 18 : 6;
+    else if (answers.marriage === "5〜10年") marriageBonus += totalEvidenceScore > 15 ? 12 : 4;
+    else if (answers.marriage === "3〜5年") marriageBonus += totalEvidenceScore > 15 ? 6 : 2;
+    else if (answers.marriage === "未婚/事実婚") {
+      marriageBonus -= 5;
+      baseMin = Math.max(0, baseMin * 0.7);
+      baseMax = Math.max(baseMin, baseMax * 0.8);
+    }
 
     // 子ども
     let childBonus = 0;
-    if (answers.children === "2人以上") childBonus += 20;
-    else if (answers.children === "1人") childBonus += 10;
-    else if (answers.children === "妊娠中") childBonus += 15;
+    if (answers.children === "2人以上") childBonus += 8;
+    else if (answers.children === "1人") childBonus += 5;
+    else if (answers.children === "妊娠中") childBonus += 6;
 
     // 相手年収（上振れ要素として弱く）
     let incomeBonus = 0;
-    if (answers.income === "800万円以上") incomeBonus += 20;
-    else if (answers.income === "500〜800万円") incomeBonus += 10;
+    if (answers.income === "800万円以上") incomeBonus += 10;
+    else if (answers.income === "500〜800万円") incomeBonus += 5;
 
     // 状況（手続段階）
     let stagePenalty = 0;
-    if (answers.status === "離婚済") stagePenalty += 5;
+    if (answers.status === "離婚済") stagePenalty += 10;
+    else if (answers.status === "未別居") {
+      stagePenalty += 5;
+      reasons.push("別居していない場合、慰謝料の認定は難しくなることがあります。");
+    }
 
-    const estMin = Math.max(0, Math.round(baseMin + impactBonus * 0.4 + durationBonus * 0.4 + marriageBonus * 0.2 + childBonus * 0.2 + incomeBonus * 0.2));
-    const estMax = Math.max(estMin, Math.round(baseMax + impactBonus + medicalBonus + durationBonus + marriageBonus + childBonus + incomeBonus - stagePenalty));
+    // 最終計算（証拠スコアを大きく反映）
+    const evidenceMultiplier = Math.max(0.3, Math.min(1.5, 0.3 + (totalEvidenceScore / 30)));
+    const estMin = Math.max(0, Math.round((baseMin + impactBonus * 0.3 + durationBonus * 0.2 + marriageBonus * 0.15 + childBonus * 0.1 + incomeBonus * 0.1) * evidenceMultiplier));
+    const estMax = Math.max(estMin, Math.round((baseMax + impactBonus * 0.6 + medicalBonus * 0.5 + durationBonus * 0.4 + marriageBonus * 0.3 + childBonus * 0.2 + incomeBonus * 0.15) * evidenceMultiplier - stagePenalty));
 
-    // 勝率（ざっくり）
-    let win = 25;
-    win += evidenceScore + logScore;
-    if (answers.medical === "診断書がある") win += 10;
-    if (answers.duration === "1年以上" || answers.duration === "3年以上") win += 10;
-    if (answers.situation === "暴力（DV）" || answers.situation === "不貞（浮気）") win += 10;
-    win = Math.max(5, Math.min(95, Math.round(win)));
-    if (win < 40) reasons.push("まずは「日時・場所・具体的言動・証拠」を揃えると見立てが安定します。");
+    // 勝率（証拠が少ない場合は大幅に下げる）
+    let win = 10; // ベースを下げる
+    win += Math.min(totalEvidenceScore * 2, 40); // 証拠スコアを大きく反映
+    if (answers.medical === "診断書がある" && totalEvidenceScore > 15) win += 15;
+    else if (answers.medical === "診断書がある") win += 5;
+    if (answers.duration === "1年以上" || answers.duration === "3年以上") {
+      win += totalEvidenceScore > 15 ? 10 : 3;
+    }
+    if (answers.situation === "暴力（DV）" || answers.situation === "不貞（浮気）") {
+      win += totalEvidenceScore > 15 ? 12 : 3;
+    }
+    
+    // 証拠が極端に少ない場合は大幅に減点
+    if (totalEvidenceScore < 5) win -= 15;
+    if (logCount === 0) win -= 10;
+    if (attachmentCount === 0 && medicalEvidenceScore === 0) win -= 10;
+    
+    win = Math.max(5, Math.min(90, Math.round(win)));
+    
+    if (win < 30) reasons.push("証拠が不足しています。まずは「日時・場所・具体的言動・証拠」を揃えると見立てが安定します。");
+    if (win < 50 && totalEvidenceScore < 15) reasons.push("証拠収集を進めることで、勝率と慰謝料額の両方が改善する可能性があります。");
 
     return { winRate: win, estMin, estMax, reasons: Array.from(new Set(reasons)).slice(0, 6) };
   };
@@ -853,8 +1214,13 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
   useEffect(() => {
     if (step === questions.length + 1) {
       const t = setTimeout(() => {
-        setResult(analyze());
-        setStep(questions.length + 2); // PaymentGate
+        const analysisResult = analyze();
+        setResult(analysisResult);
+        setStep(questions.length + 2); // Result
+        // 結果表示後、少し遅れてCTAポップアップを表示
+        setTimeout(() => {
+          setShowCTAPopup(true);
+        }, 1500);
       }, 900);
       return () => clearTimeout(t);
     }
@@ -863,8 +1229,7 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
   const qIndex = step - 1;
   const isIntro = step === 0;
   const isLoading = step === questions.length + 1;
-  const isPaymentGate = step === questions.length + 2;
-  const isResult = step === questions.length + 3;
+  const isResult = step === questions.length + 2;
 
   const handleBack = () => {
     if (step === 0) {
@@ -873,12 +1238,9 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
     } else if (step > 0 && step <= questions.length) {
       // 質問中の場合は一つ前の質問に戻る
       setStep(step - 1);
-    } else if (isPaymentGate) {
-      // 支払いゲート画面の場合はローディング画面に戻る（実際には質問の最後に戻る）
-      setStep(questions.length + 1);
     } else if (isResult) {
-      // 結果画面の場合は支払いゲート画面に戻る
-      setStep(questions.length + 2);
+      // 結果画面の場合はローディング画面に戻る（実際には質問の最後に戻る）
+      setStep(questions.length + 1);
     }
   };
 
@@ -921,7 +1283,7 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
         </div>
       )}
 
-      {!isIntro && !isLoading && !isPaymentGate && !isResult && step > 0 && step <= questions.length && (
+      {!isIntro && !isLoading && !isResult && step > 0 && step <= questions.length && (
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
           <div className="text-[10px] text-gray-400 mb-1">質問 {step}/{questions.length}</div>
           <div className="text-sm font-bold text-slate-900 mb-1">{questions[qIndex].title}</div>
@@ -947,82 +1309,7 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
         </div>
       )}
 
-      {isPaymentGate && result && (
-        <div className="space-y-3">
-          <div className="bg-gradient-to-r from-pink-600 to-purple-600 text-white p-4 rounded-xl shadow-sm">
-            <div className="text-sm font-bold mb-2 flex items-center gap-2">
-              <Sparkles size={18} /> 診断結果のご案内
-            </div>
-            <div className="text-xs text-pink-50/90 leading-relaxed">
-              診断結果をご覧いただくには、以下のいずれかをお選びください。
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-3">
-            <button
-              onClick={() => {
-                setPaymentMethod('lawyer');
-                // 弁護士紹介への登録（無料）を記録
-                try {
-                  const registrations = JSON.parse(localStorage.getItem('riko_lawyer_registrations') || '[]');
-                  registrations.push({ date: new Date().toISOString(), diagnosis: true });
-                  localStorage.setItem('riko_lawyer_registrations', JSON.stringify(registrations));
-                } catch {}
-                setStep(questions.length + 3); // Result
-              }}
-              className="w-full p-4 rounded-xl border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100 hover:shadow-md transition text-left"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-blue-900 flex items-center gap-2 mb-1">
-                    <Users size={16} /> 弁護士紹介（無料）に登録する
-                  </div>
-                  <div className="text-xs text-blue-800 leading-relaxed">
-                    診断結果を見るために、無料の弁護士紹介サービスに登録します。あなたに合った弁護士を紹介いたします。
-                  </div>
-                </div>
-                <ExternalLink size={16} className="text-blue-400 shrink-0" />
-              </div>
-            </button>
-
-            <div className="text-center text-xs text-gray-400">または</div>
-
-            <button
-              onClick={() => {
-                setPaymentMethod('report');
-                // 詳細レポート購入（500円）を記録
-                try {
-                  const purchases = JSON.parse(localStorage.getItem('riko_report_purchases') || '[]');
-                  purchases.push({ date: new Date().toISOString(), amount: 500, diagnosis: true });
-                  localStorage.setItem('riko_report_purchases', JSON.stringify(purchases));
-                } catch {}
-                setStep(questions.length + 3); // Result
-              }}
-              className="w-full p-4 rounded-xl border-2 border-pink-200 bg-gradient-to-r from-pink-50 to-pink-100 hover:shadow-md transition text-left"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-pink-900 flex items-center gap-2 mb-1">
-                    <FileText size={16} /> 詳細レポートを購入する（500円）
-                  </div>
-                  <div className="text-xs text-pink-800 leading-relaxed">
-                    診断結果の詳細レポート（PDF）を500円で購入します。弁護士紹介への登録は不要です。
-                  </div>
-                </div>
-                <div className="text-lg font-bold text-pink-600 shrink-0">¥500</div>
-              </div>
-            </button>
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
-            <div className="text-[10px] text-yellow-800 leading-relaxed">
-              <strong>注意:</strong> 診断結果は統計的な概算です。最終判断は弁護士等の専門家にご相談ください。
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isResult && result && paymentMethod && (
+      {isResult && result && (
         <div className="space-y-3">
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
             <div className="text-xs text-gray-500 mb-1">見込み（概算）</div>
@@ -1056,14 +1343,159 @@ const CompensationDiagnosisView = ({ logs, onClose }) => {
             <div className="text-[10px] text-yellow-800 leading-relaxed">
               <strong>注意:</strong> 本結果は統計的な概算です。最終判断は弁護士等の専門家にご相談ください。
             </div>
-            </div>
+          </div>
 
+          {/* CTAボタン - ホーム画面と同じデザイン */}
+          <div className="space-y-3">
+            {/* 探偵に相談する */}
+            <a
+              href="https://www.private-eye.jp/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block bg-purple-50 border border-purple-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                    <User size={16} className="text-purple-600" /> 探偵に相談する（証拠を集めるため）
+                  </div>
+                  <div className="text-xs text-gray-600 leading-relaxed mb-2">
+                    不貞の立証や証拠収集が必要なケース向けに、専門家に依頼できます。GPS調査、行動調査など、様々な調査方法があります。
+                  </div>
+                  <div className="text-xs text-purple-600 font-bold flex items-center gap-1">
+                    詳細を見る <ExternalLink size={12} />
+                  </div>
+                </div>
+                <ChevronRight size={20} className="text-purple-400 shrink-0 mt-1" />
+              </div>
+            </a>
+
+            {/* 弁護士に相談する */}
+            <a
+              href="https://www.bengo4.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                    <Users size={16} className="text-blue-600" /> 弁護士に相談する
+                  </div>
+                  <div className="text-xs text-gray-600 leading-relaxed mb-2">
+                    記録をもとに、専門家に早めに相談して方針を整理する。多くの事務所で初回相談無料。
+                  </div>
+                  <div className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                    詳細を見る <ExternalLink size={12} />
+                  </div>
+                </div>
+                <ChevronRight size={20} className="text-blue-400 shrink-0 mt-1" />
+              </div>
+            </a>
+
+            {/* プレミアムプラン */}
+            {onShowPremium && (
               <button
+                onClick={onShowPremium}
+                className="w-full bg-yellow-50 border border-yellow-200 rounded-xl shadow-sm p-4 hover:shadow-md transition text-left relative"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                      <Crown size={16} className="text-yellow-600" /> より詳細な分析をする（プレミアムプラン）
+                    </div>
+                    <div className="text-xs text-gray-600 leading-relaxed mb-2">
+                      プレミアムプランでは、詳細な分析レポート、証拠評価の内訳、勝率の詳細分析、証拠収集のアドバイスなど、より充実した診断結果をご利用いただけます。
+                    </div>
+                    <div className="text-xs text-yellow-600 font-bold flex items-center gap-1">
+                      詳細を見る <ExternalLink size={12} />
+                    </div>
+                  </div>
+                  <ChevronRight size={20} className="text-yellow-400 shrink-0 mt-1" />
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* CTAポップアップ */}
+          {showCTAPopup && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowCTAPopup(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setShowCTAPopup(false)}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+                <div className="text-center mb-4">
+                  <Sparkles size={32} className="text-pink-500 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-slate-900 mb-2">次のステップを選びましょう</div>
+                  <div className="text-xs text-gray-600">
+                    診断結果を活かすために、専門家のサポートを受けませんか？
+                  </div>
+                </div>
+                <div className="space-y-2 mt-4">
+                  <a
+                    href="https://www.private-eye.jp/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full p-4 rounded-xl bg-purple-50 border border-purple-200 hover:shadow-md transition text-left"
+                    onClick={() => setShowCTAPopup(false)}
+                  >
+                    <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                      <User size={16} className="text-purple-600" /> 探偵に相談（証拠収集）
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      不貞の立証や証拠収集が必要なケース向け
+                    </div>
+                  </a>
+                  <a
+                    href="https://www.bengo4.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full p-4 rounded-xl bg-blue-50 border border-blue-200 hover:shadow-md transition text-left"
+                    onClick={() => setShowCTAPopup(false)}
+                  >
+                    <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                      <Users size={16} className="text-blue-600" /> 弁護士に相談（無料相談あり）
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      記録をもとに、専門家に早めに相談して方針を整理する
+                    </div>
+                  </a>
+                  {onShowPremium && (
+                    <button
+                      onClick={() => {
+                        setShowCTAPopup(false);
+                        onShowPremium();
+                      }}
+                      className="w-full p-4 rounded-xl bg-yellow-50 border border-yellow-200 hover:shadow-md transition text-left"
+                    >
+                      <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                        <Crown size={16} className="text-yellow-600" /> プレミアムプランで詳細分析（月額450円）
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        詳細な分析レポート、証拠評価の内訳、勝率の詳細分析など
+                      </div>
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowCTAPopup(false)}
+                  className="w-full mt-3 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  後で見る
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
             onClick={() => { setAnswers({ impact:"",situation:"",duration:"",marriage:"",status:"",children:"",income:"",medical:"" }); setResult(null); setConsent(false); setStep(0); }}
             className="w-full bg-white text-slate-900 font-bold py-3 rounded-lg border border-gray-200 hover:bg-gray-50"
-              >
-                もう一度診断する
-              </button>
+          >
+            もう一度診断する
+          </button>
         </div>
       )}
     </div>
@@ -1375,7 +1807,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
   };
 
   return (
-    <div className="p-4 space-y-4 pb-24">
+    <div className="px-4 pt-2 pb-24 space-y-4">
       {/* 応援メッセージ */}
       <div className="bg-gradient-to-r from-pink-100 to-purple-100 border border-pink-200 rounded-xl shadow-sm p-4">
         <div className="flex items-start gap-3">
@@ -1981,12 +2413,12 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
 
   const sampleLogs = [
     {
-      date: "2025/01/10",
-      time: "19:30",
+      date: "2030/01/01",
+      time: "12:00",
       category: "モラハラ",
-      location: "自宅",
-      content: "（サンプル）夕食時に暴言を吐かれた。",
-      attachments: [{ type: "audio", name: "rec001.mp3" }],
+      location: "（サンプル）自宅",
+      content: "【サンプルデータ】これは表示例です。実際のログを記録すると、ここに表示されます。",
+      attachments: [{ type: "audio", name: "（サンプル）rec001.mp3" }],
     },
   ];
 
@@ -2895,12 +3327,12 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
 
   const sampleLogs = [
     {
-      date: "2025/01/10",
-      time: "19:30",
+      date: "2030/01/01",
+      time: "12:00",
       category: "モラハラ",
-      location: "自宅",
-      content: "（サンプル）夕食時に暴言を吐かれた。",
-      attachments: [{ type: "audio", name: "rec001.mp3" }],
+      location: "（サンプル）自宅",
+      content: "【サンプルデータ】これは表示例です。実際のログを記録すると、ここに表示されます。",
+      attachments: [{ type: "audio", name: "（サンプル）rec001.mp3" }],
     },
   ];
 
@@ -3045,6 +3477,14 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
   const getOriginalIndex = (filteredIndex) => {
     const filteredLog = filteredAndSortedLogs[filteredIndex];
     return effectiveLogs.findIndex(log => log === filteredLog);
+  };
+
+  // サンプルログかどうかを判定
+  const isSampleLog = (log) => {
+    // logsが空の場合はeffectiveLogsがsampleLogsになっている
+    if (!logs || logs.length === 0) return true;
+    // サンプルログの特徴で判定
+    return log.date === "2030/01/01" && log.content && log.content.includes("【サンプルデータ】");
   };
 
   return (
@@ -3201,44 +3641,69 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
           ) : (
             filteredAndSortedLogs.map((log, idx) => {
               const originalIdx = getOriginalIndex(idx);
+              const isSample = isSampleLog(log);
               return (
                 <div
                   key={idx}
                   onClick={() => onLogClick(log, originalIdx >= 0 ? originalIdx : idx)}
-                  className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-900 relative cursor-pointer hover:shadow-md transition-shadow"
+                  className={`p-4 rounded-xl shadow-sm border-l-4 relative cursor-pointer transition-all ${
+                    isSample 
+                      ? 'bg-gray-100 border-gray-300 opacity-60' 
+                      : 'bg-white border-slate-900 hover:shadow-md'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    <span className={`text-xs font-mono px-2 py-1 rounded ${
+                      isSample 
+                        ? 'text-gray-400 bg-gray-200' 
+                        : 'text-gray-500 bg-gray-100'
+                    }`}>
                       {log.date} {log.time}
                     </span>
                     <span
-                      className={`text-xs font-bold px-2 py-1 rounded text-white
-                        ${log.category === '暴力・DV' ? 'bg-red-600' :
-                          log.category === '不貞・浮気' ? 'bg-purple-600' :
-                          log.category === 'モラハラ' ? 'bg-orange-500' :
-                          log.category === '通院・診断書' ? 'bg-rose-600' :
-                          'bg-gray-500'
-                        }`}
+                      className={`text-xs font-bold px-2 py-1 rounded ${
+                        isSample 
+                          ? 'bg-gray-400 text-gray-300' 
+                          : `text-white ${
+                              log.category === '暴力・DV' ? 'bg-red-600' :
+                              log.category === '不貞・浮気' ? 'bg-purple-600' :
+                              log.category === 'モラハラ' ? 'bg-orange-500' :
+                              log.category === '通院・診断書' ? 'bg-rose-600' :
+                              'bg-gray-500'
+                            }`
+                      }`}
                     >
                       {log.category}
                     </span>
                   </div>
 
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-3">{log.content}</p>
+                  <p className={`text-sm whitespace-pre-wrap line-clamp-3 ${
+                    isSample ? 'text-gray-400' : 'text-gray-700'
+                  }`}>{log.content}</p>
 
                   {log.comments && log.comments.length > 0 && (
-                    <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+                    <div className={`mt-2 flex items-center gap-1 text-xs ${
+                      isSample ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
                       <MessageCircle size={12} />
                       <span>{log.comments.length}件のコメント</span>
                     </div>
                   )}
 
                   {log.medical && (
-                    <div className="mt-3 bg-rose-50 border border-rose-200 rounded-lg p-3">
-                      <div className="text-[10px] font-bold text-rose-800 mb-1">
+                    <div className={`mt-3 rounded-lg p-3 ${
+                      isSample 
+                        ? 'bg-gray-200 border border-gray-300' 
+                        : 'bg-rose-50 border border-rose-200'
+                    }`}>
+                      <div className={`text-[10px] font-bold mb-1 ${
+                        isSample ? 'text-gray-400' : 'text-rose-800'
+                      }`}>
                         医療記録（通院・診断書）
                       </div>
-                      <div className="text-xs text-rose-900 space-y-1">
+                      <div className={`text-xs space-y-1 ${
+                        isSample ? 'text-gray-400' : 'text-rose-900'
+                      }`}>
                         {(log.medical.visitType || log.medical.facility || log.medical.department) && (
                           <div className="text-[11px]">
                             {log.medical.visitType ? `種別: ${log.medical.visitType}` : ''}
@@ -3259,11 +3724,13 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
                       {log.attachments.map((att, i) => (
                         <span
                           key={i}
-                          className={`text-[10px] px-2 py-1 rounded flex items-center gap-1 border
-                            ${att.type === 'image' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                              att.type === 'audio' ? 'bg-green-50 text-green-700 border-green-100' :
-                              'bg-pink-50 text-pink-700 border-pink-100'
-                            }`}
+                          className={`text-[10px] px-2 py-1 rounded flex items-center gap-1 border ${
+                            isSample
+                              ? 'bg-gray-200 text-gray-400 border-gray-300'
+                              : att.type === 'image' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                att.type === 'audio' ? 'bg-green-50 text-green-700 border-green-100' :
+                                'bg-pink-50 text-pink-700 border-pink-100'
+                          }`}
                         >
                           {att.type === 'image' && <ImageIcon size={12} />}
                           {att.type === 'audio' && <Mic size={12} />}
@@ -3385,7 +3852,6 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
   const MAX_TOTAL_SIZE_MB_FREE = 10;
 
   // 医療的裏付け（通院・診断書等）
-  const [medicalEnabled, setMedicalEnabled] = useState(false);
   const [medicalFacility, setMedicalFacility] = useState("");
   const [medicalDepartment, setMedicalDepartment] = useState("");
   const [medicalVisitType, setMedicalVisitType] = useState("通院");
@@ -3396,11 +3862,20 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
 
   const isMedicalCategory = category === "通院・診断書";
 
-  // カテゴリ切替: 医療カテゴリ以外では医療メニューはデフォルト閉（開きっぱなし防止）
+  // カテゴリ切替: 医療カテゴリ以外では医療情報をリセット
   const prevCategoryRef = useRef(category);
   useEffect(() => {
     if (prevCategoryRef.current !== category) {
-      setMedicalEnabled(category === "通院・診断書");
+      // 「通院・診断書」以外のカテゴリに変更した場合は医療情報をリセット
+      if (category !== "通院・診断書") {
+        setMedicalFacility("");
+        setMedicalDepartment("");
+        setMedicalVisitType("通院");
+        setMedicalDiagnosis("");
+        setMedicalSeverity("不明");
+        setMedicalProofs([]);
+        setMedicalMemo("");
+      }
       prevCategoryRef.current = category;
     }
   }, [category]);
@@ -3432,7 +3907,143 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
     return parts.length ? `【医療記録】${parts.join(" / ")}` : "";
   };
 
-  const handleLocation = () => setLocation("東京都港区（GPS取得済）");
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  
+  const handleLocation = async () => {
+    // プレミアムプラン限定機能
+    if (!isPremium) {
+      if (onShowPremium) {
+        const confirmed = confirm('GPS位置情報の自動取得はプレミアムプラン限定機能です。\n\nプレミアムプランにアップグレードしますか？');
+        if (confirmed) {
+          onShowPremium();
+        }
+      } else {
+        alert('GPS位置情報の自動取得はプレミアムプラン限定機能です。\n\nプレミアムプランにアップグレードすると利用できます。');
+      }
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      alert('お使いのデバイスは位置情報取得に対応していません。');
+      return;
+    }
+
+    setIsGettingLocation(true);
+    
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          }
+        );
+      });
+
+      const { latitude, longitude, accuracy } = position.coords;
+      
+      // 逆ジオコーディング（Nominatim APIを使用）
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=ja`,
+          {
+            headers: {
+              'User-Agent': 'Riko-Log/1.0' // Nominatim APIの利用規約に従う
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error('逆ジオコーディングAPI エラー');
+        }
+        
+        const data = await response.json();
+        
+        let address = '';
+        if (data.address) {
+          // 日本の住所フォーマット: 都道府県 + 市区町村 + その他
+          const parts = [];
+          if (data.address.state || data.address.prefecture) {
+            parts.push(data.address.state || data.address.prefecture);
+          }
+          if (data.address.city || data.address.town || data.address.village) {
+            parts.push(data.address.city || data.address.town || data.address.village);
+          }
+          if (data.address.suburb || data.address.neighbourhood) {
+            parts.push(data.address.suburb || data.address.neighbourhood);
+          }
+          address = parts.join('');
+        }
+        
+        // 住所が取得できなかった場合は緯度経度を表示
+        const locationText = address || `緯度${latitude.toFixed(6)}, 経度${longitude.toFixed(6)}`;
+        const accuracyText = accuracy ? `（GPS取得済・精度: ±${Math.round(accuracy)}m）` : '（GPS取得済）';
+        setLocation(`${locationText}${accuracyText}`);
+      } catch (geocodeError) {
+        console.error('逆ジオコーディングエラー:', geocodeError);
+        // 逆ジオコーディングに失敗した場合は緯度経度を表示
+        const accuracyText = accuracy ? `（GPS取得済・精度: ±${Math.round(accuracy)}m）` : '（GPS取得済）';
+        setLocation(`緯度${latitude.toFixed(6)}, 経度${longitude.toFixed(6)}${accuracyText}`);
+      }
+    } catch (error) {
+      console.error('位置情報取得エラー:', error);
+      const PERMISSION_DENIED = 1;
+      const POSITION_UNAVAILABLE = 2;
+      const TIMEOUT = 3;
+      
+      if (error.code === PERMISSION_DENIED) {
+        // より詳細な説明を表示
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isChrome = /Chrome/.test(navigator.userAgent);
+        const isSafari = /Safari/.test(navigator.userAgent) && !isChrome;
+        const isFirefox = /Firefox/.test(navigator.userAgent);
+        
+        let instructions = '位置情報の使用が許可されていません。\n\n';
+        
+        if (isIOS && isSafari) {
+          instructions += '【iPhone/iPadの場合】\n';
+          instructions += '1. 設定アプリを開く\n';
+          instructions += '2. Safari → プライバシーとセキュリティ\n';
+          instructions += '3. 「位置情報サービス」をオンにする\n';
+          instructions += '4. Safariでこのページを再読み込み\n';
+          instructions += '5. 位置情報ボタンを押した時に表示される許可ダイアログで「許可」を選択\n\n';
+        } else if (isChrome) {
+          instructions += '【Chromeの場合】\n';
+          instructions += '1. アドレスバーの左側にある「🔒」または「ⓘ」アイコンをクリック\n';
+          instructions += '2. 「位置情報」を「許可」に変更\n';
+          instructions += '3. ページを再読み込み\n';
+          instructions += 'または、設定 → プライバシーとセキュリティ → サイトの設定 → 位置情報 から設定\n\n';
+        } else if (isFirefox) {
+          instructions += '【Firefoxの場合】\n';
+          instructions += '1. アドレスバーの左側にある「🔒」アイコンをクリック\n';
+          instructions += '2. 「位置情報」の横の「×」をクリックして「許可」に変更\n';
+          instructions += '3. ページを再読み込み\n\n';
+        } else {
+          instructions += '【一般的な手順】\n';
+          instructions += '1. ブラウザのアドレスバー左側のアイコン（🔒やⓘ）をクリック\n';
+          instructions += '2. 位置情報の設定を「許可」に変更\n';
+          instructions += '3. ページを再読み込みしてから再度お試しください\n\n';
+        }
+        
+        instructions += '※HTTPS環境（本番環境）では動作します。\n';
+        instructions += '※localhost（127.0.0.1）でも動作しますが、ブラウザによっては設定が必要な場合があります。';
+        
+        alert(instructions);
+      } else if (error.code === POSITION_UNAVAILABLE) {
+        alert('位置情報を取得できませんでした。GPS機能がオンになっているか確認してください。');
+      } else if (error.code === TIMEOUT) {
+        alert('位置情報の取得がタイムアウトしました。もう一度お試しください。');
+      } else {
+        alert('位置情報の取得に失敗しました。もう一度お試しください。');
+      }
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
   const handleFileSelect = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -3472,12 +4083,12 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
   const handleSubmit = () => {
     const now = new Date();
     const trimmed = String(content || "").trim();
-    const medicalAuto = (medicalEnabled || isMedicalCategory) && medicalHasData() ? buildMedicalAutoText() : "";
+    const medicalAuto = isMedicalCategory && medicalHasData() ? buildMedicalAutoText() : "";
     const finalContent = trimmed || medicalAuto;
     if (!finalContent) return alert("内容を入力してください（または医療記録の項目を入力してください）");
 
     const medical =
-      (medicalEnabled || isMedicalCategory) && medicalHasData()
+      isMedicalCategory && medicalHasData()
         ? {
             facility: medicalFacility.trim(),
             department: medicalDepartment.trim(),
@@ -3505,6 +4116,20 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
     return (
         <div className="p-4 bg-white min-h-full pb-24">
             <h2 className="font-bold text-lg mb-4 text-slate-900">新規ログ記録</h2>
+            
+            {/* 証拠力向上のメッセージ */}
+            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 mb-4">
+              <div className="flex items-start gap-2">
+                <span className="text-blue-600 text-lg">💡</span>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-blue-900 mb-1">記録を増やすほど証拠力が向上します</div>
+                  <div className="text-[10px] text-blue-800 leading-relaxed">
+                    日時・場所・具体的な内容を詳しく記録すればするほど、裁判で有利になります。できるだけ詳細に記録しましょう。
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div className="space-y-4">
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">カテゴリ</label>
@@ -3517,9 +4142,36 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">場所</label>
                     <div className="flex gap-2">
-                        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="自動取得ボタン" className="flex-1 bg-gray-50 border border-gray-200 rounded p-3 text-sm" />
-                        <button onClick={handleLocation} className="bg-gray-200 p-3 rounded text-gray-600"><MapPin size={20} /></button>
+                        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={isPremium ? "自動取得ボタン" : "手動入力（GPSはプレミアム限定）"} className="flex-1 bg-gray-50 border border-gray-200 rounded p-3 text-sm" disabled={isGettingLocation} />
+                        <button 
+                          onClick={handleLocation} 
+                          disabled={isGettingLocation || !isPremium}
+                          className={`p-3 rounded transition-colors relative border ${
+                            isGettingLocation 
+                              ? 'bg-gray-300 text-gray-400 cursor-not-allowed border-gray-300' 
+                              : !isPremium
+                              ? 'bg-gray-50 border-yellow-300 text-gray-400 cursor-pointer hover:bg-yellow-50'
+                              : 'bg-gray-200 text-gray-600 hover:bg-gray-300 border-gray-200'
+                          }`}
+                          title={isGettingLocation ? '位置情報取得中...' : !isPremium ? 'GPS位置情報はプレミアムプラン限定です' : 'GPSで位置情報を自動取得'}
+                        >
+                          {isGettingLocation ? (
+                            <span className="animate-spin">⏳</span>
+                          ) : (
+                            <div className="relative">
+                              <MapPin size={20} />
+                              {!isPremium && (
+                                <Crown size={10} className="absolute -top-1 -right-1 text-yellow-500 fill-yellow-500" />
+                              )}
+                            </div>
+                          )}
+                        </button>
                     </div>
+                    {!isPremium && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        💡 GPS位置情報の自動取得はプレミアムプラン限定です。手動入力も可能です。
+                      </p>
+                    )}
                             </div>
                 <textarea
                   value={content}
@@ -3533,7 +4185,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                 />
 
                 {/* 医療的裏付け（通院・診断書等） */}
-                {isMedicalCategory ? (
+                {isMedicalCategory && (
                   <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
                     <div className="text-xs font-bold text-rose-800 mb-2">医療記録（通院・診断書）</div>
                     <p className="text-[10px] text-rose-700 leading-relaxed mb-3">
@@ -3647,138 +4299,6 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                         />
                       </label>
                     </div>
-                  </div>
-                ) : (
-                  <div className="bg-white border border-rose-200 rounded-xl p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs font-bold text-slate-900">医療情報（任意）</div>
-                      <button
-                        type="button"
-                        onClick={() => setMedicalEnabled((v) => !v)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-full border transition ${
-                          medicalEnabled
-                            ? "bg-rose-50 border-rose-200 text-rose-700"
-                            : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                        }`}
-                        title="医療情報を追加する（任意）"
-                      >
-                        {medicalEnabled ? "追加中" : "追加する"}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-gray-500 leading-relaxed mt-2">
-                      診断書・通院履歴・領収書・処方箋などは<strong>証拠力が強く</strong>、増額や立証（勝率）の面で有利になりやすいです。<br />
-                      DV等のログに「医療的裏付け」を紐づけたい場合は、ここから同一ログ内に残せます。
-                    </p>
-                    {medicalEnabled && (
-                      <div className="mt-3 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className="space-y-1">
-                            <div className="text-xs font-bold text-rose-900">医療機関名</div>
-                            <input
-                              value={medicalFacility}
-                              onChange={(e) => setMedicalFacility(e.target.value)}
-                              placeholder="例）〇〇クリニック"
-                              className="w-full bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"
-                            />
-                          </label>
-                          <label className="space-y-1">
-                            <div className="text-xs font-bold text-rose-900">診療科</div>
-                            <select
-                              value={medicalDepartment}
-                              onChange={(e) => setMedicalDepartment(e.target.value)}
-                              className="w-full bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"
-                            >
-                              <option value="">未選択</option>
-                              <option value="心療内科">心療内科</option>
-                              <option value="精神科">精神科</option>
-                              <option value="内科">内科</option>
-                              <option value="整形外科">整形外科</option>
-                              <option value="産婦人科">産婦人科</option>
-                              <option value="その他">その他</option>
-                            </select>
-                          </label>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className="space-y-1">
-                            <div className="text-xs font-bold text-rose-900">種別</div>
-                            <select
-                              value={medicalVisitType}
-                              onChange={(e) => setMedicalVisitType(e.target.value)}
-                              className="w-full bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"
-                            >
-                              <option value="通院">通院</option>
-                              <option value="診断書取得">診断書取得</option>
-                              <option value="カウンセリング">カウンセリング</option>
-                              <option value="入院">入院</option>
-                              <option value="薬/処方">薬/処方</option>
-                            </select>
-                          </label>
-                          <label className="space-y-1">
-                            <div className="text-xs font-bold text-rose-900">程度</div>
-                            <select
-                              value={medicalSeverity}
-                              onChange={(e) => setMedicalSeverity(e.target.value)}
-                              className="w-full bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"
-                            >
-                              <option value="不明">不明</option>
-                              <option value="軽度">軽度</option>
-                              <option value="中等度">中等度</option>
-                              <option value="重度">重度</option>
-                            </select>
-                          </label>
-                        </div>
-
-                        <label className="space-y-1">
-                          <div className="text-xs font-bold text-rose-900">診断名/所見（任意）</div>
-                          <input
-                            value={medicalDiagnosis}
-                            onChange={(e) => setMedicalDiagnosis(e.target.value)}
-                            placeholder="例）適応障害、PTSDの疑い、打撲 など"
-                            className="w-full bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"
-                          />
-                        </label>
-
-                        <div className="space-y-2">
-                          <div className="text-xs font-bold text-rose-900">証明できる資料（チェック）</div>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              "診断書",
-                              "通院履歴/明細",
-                              "領収書",
-                              "処方箋/薬袋",
-                              "休職/就労制限の資料",
-                              "その他資料",
-                            ].map((label) => (
-                              <button
-                                key={label}
-                                type="button"
-                                onClick={() => toggleMedicalProof(label)}
-                                className={`text-[11px] font-bold px-3 py-1.5 rounded-full border transition ${
-                                  medicalProofs.includes(label)
-                                    ? "bg-rose-50 border-rose-300 text-rose-800"
-                                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-                                }`}
-                              >
-                                {medicalProofs.includes(label) ? "✓ " : ""}
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                          <p className="text-[10px] text-gray-500">※資料は「写真」添付でOK（診断書・領収書・処方箋など）。</p>
-                        </div>
-
-                        <label className="space-y-1">
-                          <div className="text-xs font-bold text-rose-900">メモ（任意）</div>
-                          <textarea
-                            value={medicalMemo}
-                            onChange={(e) => setMedicalMemo(e.target.value)}
-                            placeholder="例）受診日/症状/医師の説明、通院頻度、休職の有無など"
-                            className="w-full h-20 bg-white border border-rose-200 rounded-lg px-3 py-2 text-xs"
-                          />
-                        </label>
-                      </div>
-                    )}
                   </div>
                 )}
                 
@@ -4310,8 +4830,8 @@ const MainApp = ({ onLock, user, onLogout }) => {
   }
 
     return (
-      <div className="h-full w-full flex flex-col bg-slate-50 relative overflow-hidden font-sans text-slate-900 lg:max-w-6xl lg:mx-auto lg:shadow-xl lg:px-4" style={{ minHeight: '100dvh' }}>
-      <header className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
+      <div className="w-full bg-slate-50 font-sans text-slate-900 lg:max-w-6xl lg:mx-auto lg:shadow-xl lg:px-4" style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
+      <header className="fixed top-0 left-0 right-0 bg-slate-900 text-white px-4 py-3 flex justify-between items-center shadow-md z-50" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem', paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
         <button onClick={() => setView('dashboard')} className="font-bold text-lg tracking-wider flex items-center gap-2 hover:opacity-80 transition-opacity">
           <ShieldAlert size={20} className="text-pink-500" />
           Riko-Log
@@ -4334,7 +4854,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto overscroll-none min-h-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 92px)' }}>
+      <div className="min-h-screen" style={{ paddingTop: 'calc(4.5rem + env(safe-area-inset-top))', paddingBottom: '8rem' }}>
         {view === "dashboard" && <DashboardView logs={logs} userProfile={user} onShowDiagnosis={() => setView("diagnosis")} onShowLifeSupport={() => setView("lifeSupport")} onShowPremium={() => setView("premium")} />}
         {view === "timeline" && <TimelineView logs={logs} onLogClick={handleLogClick} userProfile={user} onShowPremium={() => setView("premium")} />}
         {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
@@ -4342,7 +4862,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
         {view === "board" && <BoardView />}
         {view === "safety" && <SafetyView />}
         {view === "export" && <ExportView logs={logs} userProfile={user} onShowPremium={() => setView("premium")} />}
-        {view === "diagnosis" && <CompensationDiagnosisView logs={logs} onClose={() => setView("dashboard")} />}
+        {view === "diagnosis" && <CompensationDiagnosisView logs={logs} onClose={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
         {view === "lifeSupport" && <LifeSupportView />}
         {view === "premium" && <PremiumPlanView user={user} onClose={() => setView("dashboard")} />}
       </div>
@@ -4355,7 +4875,11 @@ const MainApp = ({ onLock, user, onLogout }) => {
         />
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-gray-200 flex justify-around py-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 8px)' }}>
+      <nav className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-gray-200 flex justify-around py-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50" style={{ 
+        paddingBottom: 'env(safe-area-inset-bottom)', 
+        paddingLeft: 'env(safe-area-inset-left)', 
+        paddingRight: 'env(safe-area-inset-right)'
+      }}>
         <NavBtn icon={Database} label="ホーム" active={view === "dashboard"} onClick={() => setView("dashboard")} />
         <NavBtn icon={FileText} label="ログ" active={view === "timeline"} onClick={() => setView("timeline")} />
         <NavBtn icon={Plus} label="記録" active={view === "add"} onClick={() => setView("add")} isMain />
