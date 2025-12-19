@@ -56,7 +56,8 @@ import {
   Filter,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  MoreVertical
 } from 'lucide-react';
 
 // --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
@@ -735,7 +736,7 @@ const AuthScreen = ({ onLogin }) => {
         <div className="inline-block p-3 sm:p-4 bg-slate-900 rounded-full mb-3 sm:mb-4 shadow-xl">
           <ShieldAlert size={40} className="text-pink-500 sm:w-12 sm:h-12" />
         </div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-wider">Riko-Log</h1>
+        <h1 className="text-xl sm:text-2xl font-rikolog text-slate-900">リコログ</h1>
         <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2">事実を記録し、あなたを守る。</p>
       </div>
 
@@ -4624,6 +4625,10 @@ const PremiumPlanView = ({ user, onClose }) => {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs">
                 <CheckCircle2 size={16} className="text-green-500" />
+                <span className="text-gray-700">データをクラウド保管（容量無制限・削除されません）</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <CheckCircle2 size={16} className="text-green-500" />
                 <span className="text-gray-700">動画・音声の容量無制限</span>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -4655,6 +4660,10 @@ const PremiumPlanView = ({ user, onClose }) => {
             <div className="space-y-2 text-xs text-gray-600 mb-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-green-500" />
+                <span>データをクラウド保管します（容量無制限・削除されません）</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-500" />
                 <span>動画・音声の容量無制限</span>
               </div>
               <div className="flex items-center gap-2">
@@ -4668,6 +4677,18 @@ const PremiumPlanView = ({ user, onClose }) => {
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-green-500" />
                 <span>PDF全ページ出力・透かしなし（陳述書の正式版）</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4">
+            <div className="text-xs font-bold text-slate-900 mb-2">無料プランについて</div>
+            <div className="space-y-1.5 text-[10px] text-gray-700">
+              <div>• データはクラウド（Supabase）に保存されます</div>
+              <div>• 容量上限は50MBです。超過すると古いデータから自動削除されます</div>
+              <div>• 動画・音声はプレミアムプランでないとアップロードできません（テキストと写真はOK）</div>
+              <div className="mt-2 pt-2 border-t border-blue-200 text-blue-800">
+                💡 データを確実に保管したい場合は、プレミアムプランへのアップグレードをおすすめします
               </div>
             </div>
           </div>
@@ -4699,6 +4720,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLog, setSelectedLog] = useState(null);
   const [selectedLogIndex, setSelectedLogIndex] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // ログデータの読み込み
   useEffect(() => {
@@ -4831,30 +4853,65 @@ const MainApp = ({ onLock, user, onLogout }) => {
 
     return (
       <div className="w-full bg-slate-50 font-sans text-slate-900 lg:max-w-6xl lg:mx-auto lg:shadow-xl lg:px-4" style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
-      <header className="fixed top-0 left-0 right-0 bg-slate-900 text-white px-4 py-3 flex justify-between items-center shadow-md z-50" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))', paddingBottom: '0.75rem', paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
-        <button onClick={() => setView('dashboard')} className="font-bold text-lg tracking-wider flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <ShieldAlert size={20} className="text-pink-500" />
-          Riko-Log
+      <header className="fixed top-0 left-0 right-0 bg-slate-900 text-white px-3 py-2.5 flex justify-between items-center shadow-md z-50" style={{ paddingTop: 'calc(0.625rem + env(safe-area-inset-top))', paddingBottom: '0.625rem', paddingLeft: 'max(0.75rem, env(safe-area-inset-left))', paddingRight: 'max(0.75rem, env(safe-area-inset-right))' }}>
+        <button onClick={() => setView('dashboard')} className="font-rikolog text-base sm:text-lg flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+          <ShieldAlert size={18} className="text-pink-500 sm:w-5 sm:h-5" />
+          <span>リコログ</span>
         </button>
-        <div className="flex items-center gap-2">
-          {/* 安全基地(Help)ボタン */}
-          <button onClick={() => setView('safety')} className="bg-slate-800 hover:bg-slate-700 p-2 rounded-full text-xs font-bold flex items-center gap-1 px-3 text-blue-200 border border-slate-700">
-            <LifeBuoy size={14} /> Help
-          </button>
+        <div className="flex items-center gap-2 relative">
+          {/* メニューボタン */}
+          <div className="relative">
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)} 
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-white"
+              title="メニュー"
+            >
+              <MoreVertical size={18} />
+            </button>
+            {/* ドロップダウンメニュー */}
+            {isMenuOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 min-w-[160px] z-50 overflow-hidden">
+                  <button
+                    onClick={() => {
+                      setView('safety');
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left hover:bg-slate-700 transition-colors flex items-center gap-2 text-blue-200 text-sm"
+                  >
+                    <LifeBuoy size={16} />
+                    <span>ヘルプ</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onLogout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left hover:bg-slate-700 transition-colors flex items-center gap-2 text-white text-sm"
+                  >
+                    <LogOut size={16} />
+                    <span>ログアウト</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {/* 緊急ロックボタン（文字入り） */}
           <button 
-            onClick={onLogout} 
-            className="bg-slate-700 hover:bg-slate-600 p-2 rounded-full text-xs font-bold flex items-center gap-1 px-3 text-white border border-slate-600"
-            title="ログアウト"
+            onClick={onLock} 
+            className="px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors text-red-300 flex items-center gap-1.5 text-sm font-medium"
           >
-            <LogOut size={14} /> ログアウト
-          </button>
-          <button onClick={onLock} className="bg-red-600 hover:bg-red-700 p-2 rounded-full text-xs font-bold flex items-center gap-1 px-3 text-white">
-            <Lock size={14} /> 緊急ロック
+            <Lock size={16} />
+            <span>緊急ロック</span>
           </button>
         </div>
       </header>
 
-      <div className="min-h-screen" style={{ paddingTop: 'calc(4.5rem + env(safe-area-inset-top))', paddingBottom: '8rem' }}>
+      <div className="min-h-screen" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))', paddingBottom: '8rem' }}>
         {view === "dashboard" && <DashboardView logs={logs} userProfile={user} onShowDiagnosis={() => setView("diagnosis")} onShowLifeSupport={() => setView("lifeSupport")} onShowPremium={() => setView("premium")} />}
         {view === "timeline" && <TimelineView logs={logs} onLogClick={handleLogClick} userProfile={user} onShowPremium={() => setView("premium")} />}
         {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
