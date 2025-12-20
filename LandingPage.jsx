@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   ShieldAlert, 
   ShieldCheck,
@@ -567,10 +567,9 @@ export default function LandingPage() {
             <ShieldAlert className="text-pink-600" /> リコログ
           </div>
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-xs text-gray-500 mb-6 sm:mb-8 px-4">
-            <a href="#" className="hover:text-slate-900 whitespace-nowrap">利用規約</a>
-            <a href="#" className="hover:text-slate-900 whitespace-nowrap">プライバシーポリシー</a>
-            <a href="#" className="hover:text-slate-900 whitespace-nowrap">特定商取引法に基づく表記</a>
-            <a href="#" className="hover:text-slate-900 whitespace-nowrap">お問い合わせ</a>
+            <Link to="/terms" className="hover:text-slate-900 whitespace-nowrap">利用規約</Link>
+            <Link to="/privacy" className="hover:text-slate-900 whitespace-nowrap">プライバシーポリシー</Link>
+            <Link to="/commercial" className="hover:text-slate-900 whitespace-nowrap">特定商取引法に基づく表記</Link>
           </div>
           <p className="text-[10px] text-gray-400">
             &copy; 2025 Riko-Log Project. All rights reserved.<br />
