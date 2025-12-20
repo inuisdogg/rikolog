@@ -1,0 +1,583 @@
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  ShieldAlert, 
+  ShieldCheck,
+  Download, 
+  Lock, 
+  Coins, 
+  HeartCrack, 
+  Clock, 
+  CheckCircle, 
+  Calculator, 
+  Database, 
+  Home, 
+  Users, 
+  Gavel,
+  MapPin,
+  Camera,
+  Mic,
+  Video,
+  FileText,
+  Fingerprint,
+  Zap,
+  BarChart3,
+  Target,
+  Phone,
+  Crown,
+  Eye,
+  EyeOff
+} from 'lucide-react';
+
+export default function LandingPage() {
+  const navigate = useNavigate();
+
+  const handleStartClick = () => {
+    navigate('/app');
+  };
+
+  return (
+    <div className="text-slate-800 bg-slate-50 font-sans">
+      {/* Header */}
+      <header className="fixed w-full bg-white/95 backdrop-blur-md z-50 border-b border-gray-100 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-2 font-rikolog text-xl tracking-tighter text-slate-900">
+            <ShieldAlert className="text-pink-600" /> リコログ
+          </div>
+          <button 
+            onClick={handleStartClick}
+            className="bg-slate-900 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-xl hover:bg-slate-700 transition shadow-lg"
+          >
+            無料で始める
+          </button>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="pt-28 pb-16 md:pt-40 md:pb-24 px-4 bg-gradient-to-b from-pink-50 to-white">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12">
+          <div className="md:w-1/2 space-y-6 text-center md:text-left">
+            <div className="inline-block bg-pink-100 text-pink-700 text-xs font-bold px-3 py-1 rounded-full mb-2 mx-auto sm:mx-0">
+              バレずに証拠収集・慰謝料診断
+            </div>
+            <h1 className="text-3xl sm:text-4xl md:text-6xl font-black leading-tight text-slate-900">
+              その「怒り」を、<br className="block sm:hidden" />
+              <span className="text-pink-600">慰謝料</span>に変える。
+            </h1>
+            <p className="text-slate-600 text-sm md:text-base leading-relaxed font-medium px-2 sm:px-0">
+              夫のモラハラ、浮気、DV...。泣き寝入りしないでください。<br className="hidden sm:block" />
+              裁判で勝つための「法的に有効な記録」を、<br className="hidden sm:block" />
+              誰にもバレずにスマホ一つで。
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-4">
+              <button 
+                onClick={handleStartClick}
+                className="bg-pink-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:bg-pink-700 transform hover:-translate-y-1 transition flex items-center justify-center gap-2"
+              >
+                <Download size={20} /> 今すぐ記録を始める
+                <span className="text-xs font-normal opacity-80">(無料)</span>
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">※見た目は「電卓」なので絶対にバレません。</p>
+          </div>
+          
+          <div className="md:w-1/2 relative">
+            {/* App Mockup - 実際の電卓画面を再現 */}
+            <div className="relative w-64 sm:w-72 mx-auto md:w-80">
+              <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-[2.5rem] blur opacity-30"></div>
+              <div className="relative bg-slate-900 rounded-[2.5rem] border-8 border-slate-900 shadow-2xl overflow-hidden aspect-[9/19]">
+                {/* Screen Content - 実際のCalculatorModeの実装に基づく */}
+                <div className="h-full bg-black flex flex-col text-white font-sans">
+                  {/* ディスプレイ部分 */}
+                  <div className="flex-1 flex items-end justify-end p-4 sm:p-6 text-4xl sm:text-5xl font-light font-mono break-all min-h-0 overflow-hidden">
+                    0
+                  </div>
+                  {/* ボタン部分 - 実際のレイアウトに合わせる */}
+                  <div className="grid grid-cols-4 gap-3 sm:gap-4 flex-shrink-0 px-4 pb-6 sm:pb-8">
+                    {["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "C", "0", "=", "+"].map((btn, i) => (
+                      <div
+                        key={i}
+                        className={`rounded-full flex items-center justify-center shadow-lg text-xl sm:text-2xl font-medium
+                          ${btn === "=" || ["/","*","-","+"].includes(btn) 
+                            ? "bg-orange-500 text-white" 
+                            : "bg-gray-800 text-white"}
+                          ${btn === "0" ? "col-span-2 aspect-[2/1]" : "aspect-square"}
+                        `}
+                      >
+                        {btn}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Mock Alert */}
+                  <div className="absolute top-1/4 left-2 right-2 sm:left-4 sm:right-4 bg-white/95 backdrop-blur rounded-xl p-3 sm:p-4 shadow-xl border border-pink-100 transform rotate-2">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className="bg-pink-100 p-1.5 sm:p-2 rounded-full text-pink-600 shrink-0">
+                        <Lock size={16} className="sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] sm:text-xs font-bold text-gray-500">カモフラージュ機能</p>
+                        <p className="text-xs sm:text-sm font-bold text-slate-900">普段は「電卓」として動作。<br />秘密のパスコードで記録へ。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Core Features - 主要機能を強調（無料プラン） */}
+      <section className="py-16 md:py-20 px-4 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <span className="text-pink-600 font-bold tracking-widest text-xs uppercase">Free Plan Features</span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 mt-2 px-2">
+              無料で使える<br className="block sm:hidden" />「基本機能」
+            </h2>
+            <p className="text-gray-600 text-sm sm:text-base mt-4 px-2">
+              感情的な日記では勝てません。<br className="hidden sm:block" />
+              リコログは「法的に有効な証拠」を記録します。<br className="hidden sm:block" />
+              <span className="text-pink-600 font-bold">以下の機能は無料で利用できます。</span>
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {/* Feature 1: 写真添付 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200 hover:shadow-xl transition">
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Camera className="text-green-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">写真の添付</h3>
+              <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                傷の写真、不貞の証拠...。写真を添付して証拠力を高めます。無料プランでは写真3枚まで添付可能です。
+              </p>
+              <div className="flex items-center gap-2 text-xs text-green-600 font-bold mb-2">
+                <Camera size={12} /> 写真3枚まで無料
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="text-xs">※録音・動画はプレミアムプランで利用可能</span>
+              </div>
+            </div>
+
+            {/* Feature 2: 慰謝料診断 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200 hover:shadow-xl transition">
+              <div className="w-14 h-14 bg-pink-100 rounded-full flex items-center justify-center mb-4">
+                <Calculator className="text-pink-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">AI慰謝料診断</h3>
+              <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                過去の判例データに基づき、あなたの慰謝料相場を自動算出。5つの質問で即座に診断できます。
+              </p>
+              <div className="flex items-center gap-2 text-xs text-pink-600 font-bold">
+                <CheckCircle size={14} /> 無料で診断可能
+              </div>
+            </div>
+
+            {/* Feature 3: 証拠レベル表示 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200 hover:shadow-xl transition">
+              <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+                <BarChart3 className="text-orange-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">証拠レベル可視化</h3>
+              <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                記録の充実度を「証拠レベル（％）」で表示。統計データで、あなたの準備状況が一目で分かります。
+              </p>
+              <div className="flex items-center gap-2 text-xs text-orange-600 font-bold">
+                <CheckCircle size={14} /> 進捗を可視化
+              </div>
+            </div>
+
+            {/* Feature 4: 生体認証 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200 hover:shadow-xl transition">
+              <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+                <Fingerprint className="text-indigo-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">生体認証ログイン</h3>
+              <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                Face ID・Touch ID対応。パスワード入力不要で、素早く安全にアクセスできます。
+              </p>
+              <div className="flex items-center gap-2 text-xs text-indigo-600 font-bold">
+                <CheckCircle size={14} /> Face ID・Touch ID対応
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Camouflage Feature - 最も差別化される点 */}
+      <section className="py-16 md:py-20 px-4 bg-slate-50">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center gap-8 sm:gap-10">
+            <div className="md:w-1/2 order-2 md:order-1">
+              <div className="bg-slate-900 rounded-2xl p-6 sm:p-8 text-center text-white relative overflow-hidden shadow-xl">
+                <div className="absolute top-0 right-0 p-10 opacity-10">
+                  <Calculator size={120} />
+                </div>
+                <div className="relative z-10">
+                  <div className="text-5xl sm:text-6xl font-thin font-mono mb-6 sm:mb-8">7777</div>
+                  <div className="grid grid-cols-4 gap-3 sm:gap-4 opacity-50 mb-6">
+                    <div className="bg-gray-700 h-10 w-10 sm:h-12 sm:w-12 rounded-full mx-auto"></div>
+                    <div className="bg-gray-700 h-10 w-10 sm:h-12 sm:w-12 rounded-full mx-auto"></div>
+                    <div className="bg-gray-700 h-10 w-10 sm:h-12 sm:w-12 rounded-full mx-auto"></div>
+                    <div className="bg-orange-500 h-10 w-10 sm:h-12 sm:w-12 rounded-full mx-auto"></div>
+                  </div>
+                  <p className="text-xs sm:text-sm font-bold text-pink-400">↑ このパスコードでロック解除</p>
+                </div>
+              </div>
+            </div>
+            <div className="md:w-1/2 order-1 md:order-2">
+              <div className="inline-block bg-pink-100 text-pink-700 text-xs font-bold px-3 py-1 rounded-full mb-4">Camouflage</div>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-slate-900">徹底的なカモフラージュ。<br className="block sm:hidden" />誰にもバレない。</h2>
+              <p className="text-gray-600 text-sm sm:text-base leading-relaxed mb-6">
+                アプリアイコンも起動画面も「電卓」です。実際に計算もできます。
+                夫にスマホを見られても、ただの電卓アプリにしか見えません。<br className="hidden sm:block" />
+                秘密の計算式（パスコード）を入力した時だけ、裏の記録画面が開きます。
+              </p>
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                    <Calculator className="text-slate-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">電卓アイコン</p>
+                    <p className="text-xs text-gray-500">無料プランで利用可能</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                    <Zap className="text-red-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">緊急ロックボタン</p>
+                    <p className="text-xs text-gray-500">一瞬で電卓画面に戻る（無料）</p>
+                  </div>
+                </div>
+              </div>
+              <ul className="space-y-2 text-sm font-bold text-slate-700">
+                <li className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> 電卓アイコン（無料）</li>
+                <li className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> 緊急ロックボタン搭載（無料）</li>
+                <li className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> 実際に計算もできる（無料）</li>
+                <li className="flex items-center gap-2"><Crown size={16} className="text-yellow-500" /> 天気・カレンダーなど35種類（プレミアム）</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Evidence Recording Flow */}
+      <section className="py-16 md:py-20 px-4 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <span className="text-pink-600 font-bold tracking-widest text-xs uppercase">Evidence Recording</span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 mt-2 px-2">
+              証拠記録の流れ
+            </h2>
+            <p className="text-gray-600 text-sm sm:text-base mt-4 px-2">
+              スマホ一つで、法的に有効な証拠を完璧に記録します。
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            {/* Step 1 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200">
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <div className="w-12 h-12 bg-pink-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
+                  1
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg mb-2 text-slate-900">カテゴリを選択</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    モラハラ、DV、不貞、生活費未払い、育児放棄など、該当するカテゴリを選択します。
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="bg-white px-3 py-1 rounded-full text-xs font-bold text-slate-700 border border-slate-200">モラハラ</span>
+                    <span className="bg-white px-3 py-1 rounded-full text-xs font-bold text-slate-700 border border-slate-200">DV</span>
+                    <span className="bg-white px-3 py-1 rounded-full text-xs font-bold text-slate-700 border border-slate-200">不貞</span>
+                    <span className="bg-white px-3 py-1 rounded-full text-xs font-bold text-slate-700 border border-slate-200">生活費</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200">
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <div className="w-12 h-12 bg-pink-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
+                  2
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg mb-2 text-slate-900">位置情報を記録</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    「いつ・どこで」を記録。無料プランでは手動入力、プレミアムプランではGPSで自動取得できます。
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-blue-600 font-bold mb-1">
+                    <MapPin size={14} /> 手動入力（無料）
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-yellow-600 font-bold">
+                    <Crown size={12} /> GPS自動取得（プレミアム）
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200">
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <div className="w-12 h-12 bg-pink-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
+                  3
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg mb-2 text-slate-900">詳細を記録・証拠を添付</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    何をされたか、何を言われたかを具体的に記録。無料プランでは写真3枚まで、プレミアムプランでは録音・動画も添付できます。
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-green-600 font-bold mb-1">
+                    <Camera size={14} /> 写真（無料・3枚まで）
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-yellow-600 font-bold">
+                    <Crown size={12} /> 録音・動画（プレミアム）
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="bg-slate-50 p-6 rounded-xl shadow-lg border border-slate-200">
+              <div className="flex flex-col sm:flex-row items-start gap-4">
+                <div className="w-12 h-12 bg-pink-600 text-white rounded-full flex items-center justify-center font-bold shrink-0">
+                  4
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg mb-2 text-slate-900">クラウドに安全保存</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    記録はクラウドに自動保存されます。スマホを壊されても、データは消えません。
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-green-600 font-bold">
+                    <CheckCircle size={14} /> クラウド保存・安全（無料）
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* AI Diagnosis Teaser */}
+      <section className="py-16 md:py-20 px-4 bg-gradient-to-b from-pink-50 to-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 mb-4 sm:mb-6 px-2">
+            まずは、あなたの「勝てる金額」を<br className="block sm:hidden" />知りたくありませんか？
+          </h2>
+          <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg inline-block max-w-lg w-full mb-6 sm:mb-8 border border-slate-200">
+            <div className="flex justify-center mb-4">
+              <div className="bg-pink-100 p-3 rounded-full">
+                <Calculator className="w-10 h-10 sm:w-12 sm:h-12 text-pink-600" />
+              </div>
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold mb-2 text-slate-900">AI慰謝料無料診断</h3>
+            <p className="text-sm text-gray-600 mb-4 sm:mb-6">
+              5つの質問に答えるだけで、過去の判例データに基づいた<br className="hidden sm:block" />
+              あなたの慰謝料相場（レンジ）を算出します。
+            </p>
+            <div className="bg-slate-50 p-4 rounded-lg mb-4">
+              <div className="text-3xl sm:text-4xl font-mono font-bold text-slate-900 mb-2">
+                <span className="text-pink-600">??</span>〜<span className="text-pink-600">??</span><span className="text-base sm:text-lg">万円</span>
+              </div>
+              <p className="text-xs text-gray-500">※記録数や証拠の有無で変動します</p>
+            </div>
+            <div className="space-y-2 text-left text-xs text-gray-600 mb-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={12} className="text-green-500" /> 過去の判例データベースから算出
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle size={12} className="text-green-500" /> 記録数・証拠の有無を考慮
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle size={12} className="text-green-500" /> 完全無料・即座に診断
+              </div>
+            </div>
+            <button 
+              onClick={handleStartClick}
+              className="w-full bg-pink-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-pink-700 transition shadow-lg"
+            >
+              無料診断を始める
+            </button>
+            <p className="text-xs text-gray-400 mt-3">※アプリ内で無料で診断できます</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Premium Features */}
+      <section className="py-16 md:py-20 px-4 bg-slate-50">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <div className="inline-flex items-center gap-2 bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full mb-4">
+              <Crown size={14} /> Premium
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 mt-2 px-2">
+              プレミアムプランで<br className="block sm:hidden" />さらに強力に
+            </h2>
+            <p className="text-gray-600 text-sm sm:text-base mt-4 px-2">
+              より多くのカモフラージュアイコンと、<br className="hidden sm:block" />
+              追加機能で証拠収集を完璧に。
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
+            <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-yellow-200">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <Calculator className="text-yellow-600" size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">35種類のアイコン</h3>
+                  <p className="text-xs text-gray-500">電卓以外も選択可能</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                天気、カレンダー、時計、メモ、写真など、35種類以上のアイコンから選択できます。より自然なカモフラージュが可能です。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">天気</span>
+                <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">カレンダー</span>
+                <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">時計</span>
+                <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">メモ</span>
+                <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">+30種類</span>
+              </div>
+              <div className="mt-3 pt-3 border-t border-yellow-200">
+                <p className="text-xs text-gray-500">※無料プランでは電卓アイコンのみ利用可能</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-lg border-2 border-yellow-200">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <Target className="text-yellow-600" size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">プレミアム限定機能</h3>
+                  <p className="text-xs text-gray-500">証拠収集を完璧に</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                プレミアムプランでは、以下の機能が利用できます。
+              </p>
+              <ul className="space-y-2 text-sm text-slate-700 mb-4">
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-yellow-600" /> GPS位置情報の自動取得
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-yellow-600" /> 録音・動画の添付
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-yellow-600" /> 陳述書PDF出力
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-yellow-600" /> 35種類のカモフラージュアイコン
+                </li>
+              </ul>
+              <div className="mt-4 pt-4 border-t border-yellow-200">
+                <p className="text-xs text-gray-500">
+                  ※離婚準備チェックリストやガイドは無料ユーザーでも利用可能です
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Safety Features */}
+      <section className="py-16 md:py-20 px-4 bg-white">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <span className="text-pink-600 font-bold tracking-widest text-xs uppercase">Safety</span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 mt-2 px-2">
+              あなたを守る「安全基地」
+            </h2>
+            <p className="text-gray-600 text-sm sm:text-base mt-4 px-2">
+              緊急時にも、すぐに助けを求められます。
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-6">
+            <div className="bg-red-50 p-6 rounded-xl shadow-lg border border-red-200 text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Phone className="text-red-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">緊急連絡先</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                110番、#8008（DV相談）、#9110へのワンタップ発信機能
+              </p>
+            </div>
+
+            <div className="bg-blue-50 p-6 rounded-xl shadow-lg border border-blue-200 text-center">
+              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ShieldAlert className="text-blue-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">相談機関リンク</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                法テラス、内閣府DV相談など、すぐにアクセスできるリンク集
+              </p>
+            </div>
+
+            <div className="bg-green-50 p-6 rounded-xl shadow-lg border border-green-200 text-center">
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Home className="text-green-600" size={28} />
+              </div>
+              <h3 className="font-bold text-lg mb-2 text-slate-900">避難のヒント</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                逃げる時の持ち物リストなど、実用的な情報を提供
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-16 md:py-20 px-4 bg-slate-900 text-white text-center">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-4 sm:mb-6 px-2">
+            記憶は消えるが、<br className="block sm:hidden" />記録は残る。
+          </h2>
+          <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-8 sm:mb-10 px-2">
+            リコログは、あなたが不利な条件で離婚しないための「保険」であり「盾」です。<br className="hidden sm:block" />
+            感情的なメールを夫に送る前に、まずはここに書き殴ってください。<br className="hidden sm:block" />
+            その記録が、いざという時にあなたと子供の未来を守ります。
+          </p>
+          
+          <button 
+            onClick={handleStartClick}
+            className="inline-flex items-center justify-center gap-3 bg-pink-600 text-white font-bold py-4 sm:py-5 px-8 sm:px-10 rounded-xl shadow-2xl hover:bg-pink-700 transform hover:scale-105 transition w-full sm:w-auto"
+          >
+            <ShieldCheck size={20} />
+            <span>今すぐ無料で証拠を集める</span>
+          </button>
+          <p className="text-xs text-slate-400 mt-4">
+            ※完全匿名利用可・プライバシー保護・無料で始められます
+          </p>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-white py-10 border-t border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <div className="flex justify-center items-center gap-2 font-rikolog text-xl text-slate-900 mb-4">
+            <ShieldAlert className="text-pink-600" /> リコログ
+          </div>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-xs text-gray-500 mb-6 sm:mb-8 px-4">
+            <a href="#" className="hover:text-slate-900 whitespace-nowrap">利用規約</a>
+            <a href="#" className="hover:text-slate-900 whitespace-nowrap">プライバシーポリシー</a>
+            <a href="#" className="hover:text-slate-900 whitespace-nowrap">特定商取引法に基づく表記</a>
+            <a href="#" className="hover:text-slate-900 whitespace-nowrap">お問い合わせ</a>
+          </div>
+          <p className="text-[10px] text-gray-400">
+            &copy; 2025 Riko-Log Project. All rights reserved.<br />
+            ※本サービスは法的助言を提供するものではありません。具体的な判断は弁護士にご相談ください。
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+}
