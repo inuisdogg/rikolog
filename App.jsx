@@ -59,7 +59,23 @@ import {
   ArrowDown,
   MoreVertical,
   Eye,
-  EyeOff
+  EyeOff,
+  Map,
+  Info,
+  AlertTriangle,
+  Folder,
+  Shield,
+  Building2 as BuildingIcon,
+  Users as UsersIcon,
+  Scale,
+  Wallet,
+  FileText as FileIcon,
+  Lock as LockIcon,
+  ArrowRight,
+  Target,
+  Package,
+  UserCheck,
+  Gavel
 } from 'lucide-react';
 
 // --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
@@ -426,7 +442,7 @@ const AuthScreen = ({ onLogin }) => {
       const publicKeyCredentialCreationOptions = {
         challenge: challenge,
         rp: {
-          name: "Riko-Log",
+          name: "リコログ",
           id: window.location.hostname,
         },
         user: {
@@ -2092,6 +2108,9 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
   // --- プレミアムプランチェック ---
   const isPremium = useMemo(() => checkPremiumStatus(), []);
 
+  // --- ロードマップモーダル ---
+  const [isRoadmapModalOpen, setIsRoadmapModalOpen] = useState(false);
+
   // --- ホーム画面追加（PWA）偽装選択 ---
   const [isDisguiseModalOpen, setIsDisguiseModalOpen] = useState(false);
   const [disguiseQuery, setDisguiseQuery] = useState('');
@@ -2201,6 +2220,27 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
             <div className="text-xs text-slate-700 leading-relaxed">
               {encouragementMessage || '記録を続けることで、あなたの声が届きます。'}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 離婚へのロードマップ */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl shadow-sm p-4">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 bg-blue-500 rounded-full p-2">
+            <Map size={18} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-blue-900 mb-1">離婚へのロードマップ</div>
+            <div className="text-xs text-slate-700 leading-relaxed mb-2">
+              準備から解決まで、5つのステップで進める離婚手続きの全体像を確認できます。
+            </div>
+            <button
+              onClick={() => setIsRoadmapModalOpen(true)}
+              className="text-xs font-bold text-blue-700 hover:text-blue-800 underline"
+            >
+              詳細を見る →
+            </button>
           </div>
         </div>
       </div>
@@ -2322,6 +2362,445 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
                 className="bg-pink-600 hover:bg-pink-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow"
               >
                 この見た目で追加する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ロードマップモーダル */}
+      {isRoadmapModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsRoadmapModalOpen(false)} />
+          <div className="relative w-full sm:max-w-2xl lg:max-w-4xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div>
+                <div className="text-base font-bold text-blue-900 flex items-center gap-2">
+                  <Map size={20} /> 離婚へのロードマップ：準備から解決まで
+                </div>
+                <div className="text-xs text-blue-700 mt-1">戦略的に進める離婚手続きの全体像</div>
+              </div>
+              <button
+                onClick={() => setIsRoadmapModalOpen(false)}
+                className="p-2 rounded-full hover:bg-white/50 text-gray-600"
+                title="閉じる"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-6 text-sm">
+              {/* イントロダクション */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <Info size={20} className="text-blue-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-slate-700 leading-relaxed">
+                    離婚は単なる「別れ」ではなく、生活の基盤を再構築する法的な手続きです。
+                    感情的にならず、長期的な視点で戦略的に進めることが、あなたと子供の未来を守る鍵となります。
+                  </p>
+                </div>
+              </div>
+
+              {/* 全体の流れ */}
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-2 flex items-center gap-2">
+                  <Calendar size={20} className="text-blue-600" /> 全体の流れ（5つのステップ）
+                </h3>
+                <p className="text-xs text-slate-600 mb-4 pl-7">
+                  現在の状況がどのフェーズにあるかを確認し、次にやるべきことを把握しましょう。
+                </p>
+
+                {/* STEP 1 */}
+                <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm shrink-0">1</div>
+                    <div className="font-bold text-blue-900 flex items-center gap-2">
+                      <Folder size={18} /> 証拠収集・準備フェーズ（現在地）
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-700 mb-3 ml-9">
+                    相手に気づかれずに「武器（証拠）」を集め、逃げるための資金と場所を確保する段階です。
+                  </p>
+                  <div className="text-xs font-semibold text-blue-800 mb-3 ml-9 flex items-center gap-2">
+                    <Target size={14} /> <span>目的: 有利な条件で離婚するための材料を揃える。</span>
+                  </div>
+                  <div className="text-xs text-slate-700 space-y-2.5 ml-9">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <FileIcon size={14} className="text-blue-600" /> 証拠の保全
+                        </div>
+                        <div className="text-slate-600">日記、録音、写真、LINEスクショなどを安全な場所（<span className="font-rikolog">リコログ</span>等）に保存する。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <CreditCard size={14} className="text-blue-600" /> 財産把握
+                        </div>
+                        <div className="text-slate-600">相手の通帳、給与明細、源泉徴収票、不動産権利証などのコピーをとる。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Wallet size={14} className="text-blue-600" /> 別居資金の確保
+                        </div>
+                        <div className="text-slate-600">自分名義の口座に現金を移す（へそくり）。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Phone size={14} className="text-blue-600" /> 相談
+                        </div>
+                        <div className="text-slate-600">弁護士や自治体の相談窓口に行き、見通しを立てる。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 2 */}
+                <div className="mb-4 p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-r-lg shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-indigo-500 text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm shrink-0">2</div>
+                    <div className="font-bold text-indigo-900 flex items-center gap-2">
+                      <LogOut size={18} /> 別居開始
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-700 mb-3 ml-9">
+                    物理的な距離を取り、安全を確保します。法的には「婚姻関係の破綻」を客観的に示す重要なアクションです。
+                  </p>
+                  <div className="text-xs font-semibold text-indigo-800 mb-3 ml-9 flex items-center gap-2">
+                    <Target size={14} /> <span>目的: 身の安全確保と、離婚意思の固さを示す。</span>
+                  </div>
+                  <div className="text-xs text-slate-700 space-y-2.5 ml-9">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Package size={14} className="text-indigo-600" /> 持ち出し
+                        </div>
+                        <div className="text-slate-600">貴重品、証拠データ、当面の生活用品を持って家を出る。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <LockIcon size={14} className="text-indigo-600" /> 住民票の移動
+                        </div>
+                        <div className="text-slate-600">必要に応じて閲覧制限の手続きを行う（DVの場合）。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <CreditCard size={14} className="text-indigo-600" /> 婚姻費用分担請求
+                        </div>
+                        <div className="text-slate-600">別居中の生活費を相手に請求する手続き（調停）をすぐに行う。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 3 */}
+                <div className="mb-4 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-purple-500 text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm shrink-0">3</div>
+                    <div className="font-bold text-purple-900 flex items-center gap-2">
+                      <MessageSquare size={18} /> 協議離婚（話し合い）
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-700 mb-3 ml-9">
+                    夫婦間の話し合いで条件を決め、離婚届を提出します。日本で最も多いパターン（約90%）です。
+                  </p>
+                  <div className="text-xs font-semibold text-purple-800 mb-3 ml-9 flex items-center gap-2">
+                    <Target size={14} /> <span>目的: 時間と費用をかけずに解決する。</span>
+                  </div>
+                  <div className="text-xs text-slate-700 space-y-2.5 ml-9">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-purple-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <UsersIcon size={14} className="text-purple-600" /> 条件交渉
+                        </div>
+                        <div className="text-slate-600">親権、養育費、財産分与、慰謝料について話し合う。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-purple-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <FileIcon size={14} className="text-purple-600" /> 離婚協議書の作成
+                        </div>
+                        <div className="text-slate-600">合意内容を書面に残す。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-purple-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Shield size={14} className="text-purple-600" /> 公正証書化
+                          <span className="text-red-600 text-xs bg-red-50 px-1.5 py-0.5 rounded">超重要</span>
+                        </div>
+                        <div className="text-slate-600">養育費などが不払いになった際に、裁判なしで差し押さえできるようにする。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 4 */}
+                <div className="mb-4 p-4 bg-pink-50 border-l-4 border-pink-500 rounded-r-lg shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-pink-500 text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm shrink-0">4</div>
+                    <div className="font-bold text-pink-900 flex items-center gap-2">
+                      <BuildingIcon size={18} /> 離婚調停
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-700 mb-3 ml-9">
+                    話し合いがまとまらない場合、家庭裁判所で調停委員を介して間接的に話し合います。
+                  </p>
+                  <div className="text-xs font-semibold text-pink-800 mb-3 ml-9 flex items-center gap-2">
+                    <Target size={14} /> <span>目的: 第三者を入れて冷静に合意を目指す。</span>
+                  </div>
+                  <div className="text-xs text-slate-700 space-y-2.5 ml-9">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-pink-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <FileIcon size={14} className="text-pink-600" /> 申立て
+                        </div>
+                        <div className="text-slate-600">家庭裁判所に調停を申し立てる。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-pink-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Database size={14} className="text-pink-600" /> 陳述書の提出
+                        </div>
+                        <div className="text-slate-600">これまでの経緯や証拠（<span className="font-rikolog">リコログ</span>の記録）を提出し、主張の正当性を訴える。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-pink-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Calendar size={14} className="text-pink-600" /> 期日への出頭
+                        </div>
+                        <div className="text-slate-600">月1回程度、裁判所へ行く（相手と顔を合わせないよう配慮される）。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 5 */}
+                <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm shrink-0">5</div>
+                    <div className="font-bold text-red-900 flex items-center gap-2">
+                      <Gavel size={18} /> 裁判（訴訟）
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-700 mb-3 ml-9">
+                    調停でも決裂した場合の最終手段です。裁判官が判決を下します。
+                  </p>
+                  <div className="text-xs font-semibold text-red-800 mb-3 ml-9 flex items-center gap-2">
+                    <Target size={14} /> <span>目的: 法的な強制力のある「判決」をもらう。</span>
+                  </div>
+                  <div className="text-xs text-slate-700 space-y-2.5 ml-9">
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Briefcase size={14} className="text-red-600" /> 弁護士への依頼
+                        </div>
+                        <div className="text-slate-600">本人訴訟も可能だが、専門知識が必要なため弁護士が必須に近い。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <UserCheck size={14} className="text-red-600" /> 尋問
+                        </div>
+                        <div className="text-slate-600">法廷で質問に答える。</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2 size={16} className="text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-slate-900 flex items-center gap-1.5 mb-0.5">
+                          <Scale size={14} className="text-red-600" /> 判決または和解
+                        </div>
+                        <div className="text-slate-600">裁判官の判断により離婚の可否や条件が決定される。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3大リスクと対策 */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h3 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+                  <AlertTriangle size={20} className="text-orange-500" /> 3大リスクと対策
+                </h3>
+                <p className="text-xs text-slate-600 mb-4 pl-7">
+                  離婚にはエネルギーが必要です。「こんなはずじゃなかった」とならないよう、あらかじめリスクを知り、備えておきましょう。
+                </p>
+
+                <div className="space-y-4">
+                  <div className="p-4 bg-orange-50 border-l-4 border-orange-500 rounded-r-lg shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CreditCard size={18} className="text-orange-600" />
+                      <div className="font-bold text-orange-900">1. 金銭的リスク</div>
+                    </div>
+                    <div className="ml-7 space-y-3">
+                      <div>
+                        <div className="flex items-start gap-2 mb-1">
+                          <AlertTriangle size={14} className="text-orange-600 shrink-0 mt-0.5" />
+                          <span className="text-xs font-semibold text-slate-900">リスク</span>
+                        </div>
+                        <p className="text-xs text-slate-700 ml-6">
+                          別居後の生活費、引っ越し費用、弁護士費用（着手金・報酬金）が発生し、一時的に困窮する可能性があります。
+                        </p>
+                      </div>
+                      <div>
+                        <div className="flex items-start gap-2 mb-1">
+                          <Shield size={14} className="text-green-600 shrink-0 mt-0.5" />
+                          <span className="text-xs font-semibold text-slate-900">対策</span>
+                        </div>
+                        <ul className="text-xs text-slate-700 ml-6 space-y-1.5">
+                          <li className="flex items-start gap-2">
+                            <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
+                            <span>別居前に共有財産（預貯金）を確実に把握し、持ち出せるものは持ち出す。</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
+                            <span>別居開始と同時に「婚姻費用（コンピ）」を請求し、相手の収入から生活費をもらう権利を行使する。</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Heart size={18} className="text-red-600" />
+                      <div className="font-bold text-red-900">2. 精神的ストレス</div>
+                    </div>
+                    <div className="ml-7 space-y-3">
+                      <div>
+                        <div className="flex items-start gap-2 mb-1">
+                          <AlertTriangle size={14} className="text-red-600 shrink-0 mt-0.5" />
+                          <span className="text-xs font-semibold text-slate-900">リスク</span>
+                        </div>
+                        <p className="text-xs text-slate-700 ml-6">
+                          相手からの執拗な連絡、親権争い、将来への不安でメンタルが削られます。PTSDやうつ状態になることも珍しくありません。
+                        </p>
+                      </div>
+                      <div>
+                        <div className="flex items-start gap-2 mb-1">
+                          <Shield size={14} className="text-green-600 shrink-0 mt-0.5" />
+                          <span className="text-xs font-semibold text-slate-900">対策</span>
+                        </div>
+                        <ul className="text-xs text-slate-700 ml-6 space-y-1.5">
+                          <li className="flex items-start gap-2">
+                            <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
+                            <span>一人で抱え込まない。友人、親族、カウンセラー、弁護士などの「味方」を作る。</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
+                            <span>このアプリ（<span className="font-rikolog">リコログ</span>）のような「安全基地」を持ち、感情を吐き出す場所を作る。</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Clock size={18} className="text-yellow-600" />
+                      <div className="font-bold text-yellow-900">3. 長期化のリスク</div>
+                    </div>
+                    <div className="ml-7 space-y-3">
+                      <div>
+                        <div className="flex items-start gap-2 mb-1">
+                          <AlertTriangle size={14} className="text-yellow-600 shrink-0 mt-0.5" />
+                          <span className="text-xs font-semibold text-slate-900">リスク</span>
+                        </div>
+                        <p className="text-xs text-slate-700 ml-6">
+                          相手が離婚を拒否したり、親権で揉めると、解決まで1年〜数年かかる泥沼化の恐れがあります。
+                        </p>
+                      </div>
+                      <div>
+                        <div className="flex items-start gap-2 mb-1">
+                          <Shield size={14} className="text-green-600 shrink-0 mt-0.5" />
+                          <span className="text-xs font-semibold text-slate-900">対策</span>
+                        </div>
+                        <ul className="text-xs text-slate-700 ml-6 space-y-1.5">
+                          <li className="flex items-start gap-2">
+                            <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
+                            <span>早期解決の最短ルートは、相手が言い逃れできない「決定的な証拠」を最初に突きつけることです。</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <CheckCircle2 size={14} className="text-green-600 shrink-0 mt-0.5" />
+                            <span>証拠さえあれば、裁判になっても勝てる見込みが高まり、相手も諦めて条件を飲みやすくなります。</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 心構え */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 border-l-4 border-pink-500 rounded-r-lg p-5 shadow-sm">
+                  <h3 className="text-base font-bold text-pink-900 mb-3 flex items-center gap-2">
+                    <Shield size={20} className="text-pink-600" /> 心構え：<span className="font-rikolog">リコログ</span>の役割
+                  </h3>
+                  <div className="mb-3">
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      このアプリは、あなたが不利な条件で離婚しないための<strong className="text-pink-900">「保険」であり「盾」</strong>です。
+                    </p>
+                  </div>
+                  <div className="space-y-2.5">
+                    <div className="flex items-start gap-3">
+                      <MessageSquare size={18} className="text-pink-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        <strong>感情的なメールを送る前に、</strong>まずはここに書き殴ってください。
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Calendar size={18} className="text-pink-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        <strong>辛いことがあったら、</strong>日時と場所を記録してください。
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <Database size={18} className="text-pink-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        <strong>淡々と積み上げたその記録が、</strong>いざという時にあなたと子供を守る最強の武器になります。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-white">
+              <button
+                onClick={() => setIsRoadmapModalOpen(false)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg text-sm shadow"
+              >
+                閉じる
               </button>
             </div>
           </div>
@@ -2907,7 +3386,7 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
 // --- メッセージ機能 ---
 const MessagesView = () => {
   const [messages, setMessages] = useState([
-    { id: 1, from: "Riko-Log事務局", subject: "【重要】データのバックアップについて", body: "万が一の紛失に備え、定期的にPDF出力を行い、外部の安全な場所に保管することを推奨します。", date: "2025/01/10", read: true },
+    { id: 1, from: "リコログ事務局", subject: "【重要】データのバックアップについて", body: "万が一の紛失に備え、定期的にPDF出力を行い、外部の安全な場所に保管することを推奨します。", date: "2025/01/10", read: true },
   ]);
 
     return (
@@ -2919,7 +3398,7 @@ const MessagesView = () => {
         {messages.map(msg => (
           <div key={msg.id} className={`bg-white p-4 rounded-lg shadow-sm border ${msg.read ? 'border-gray-100' : 'border-pink-200 bg-pink-50'}`}>
             <div className="flex justify-between items-start mb-1">
-              <span className="text-xs font-bold text-slate-700">{msg.from}</span>
+              <span className="text-xs font-bold text-slate-700 font-rikolog">{msg.from}</span>
               <span className="text-[10px] text-gray-400">{msg.date}</span>
             </div>
             <div className="text-sm font-bold text-slate-900 mb-1">{msg.subject}</div>
@@ -5340,16 +5819,34 @@ export default function App() {
     // セッションを確認
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log("セッション確認を開始...");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error("セッション取得エラー:", sessionError);
+          setIsLoading(false);
+          return;
+        }
         if (session?.user) {
-          const userProfile = await getCurrentUser();
-          if (userProfile) {
-            setCurrentUser({ ...userProfile, id: session.user.id });
+          console.log("セッションが見つかりました。ユーザープロフィールを取得中...");
+          try {
+            const userProfile = await getCurrentUser();
+            if (userProfile) {
+              setCurrentUser({ ...userProfile, id: session.user.id });
+              console.log("ユーザープロフィールを設定しました");
+            } else {
+              console.log("ユーザープロフィールが見つかりませんでした");
+            }
+          } catch (profileError) {
+            console.error("ユーザープロフィール取得エラー:", profileError);
           }
+        } else {
+          console.log("セッションが見つかりませんでした");
         }
       } catch (err) {
         console.error("セッション確認エラー:", err);
+        console.error("エラー詳細:", err.message, err.stack);
       } finally {
+        console.log("セッション確認完了。ローディングを終了します");
         setIsLoading(false);
       }
     };

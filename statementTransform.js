@@ -231,7 +231,7 @@ export function buildStatementDataFromLogs({ logs, userProfile }) {
       author: safeStr(userProfile?.name || userProfile?.email),
     },
     introduction:
-      `婚姻関係破綻に至る経緯、および相手方の不法行為について、以下の通り日々の記録（アプリ「Riko-Log」による日時・位置情報等の自動記録を含む）に基づき陳述いたします。${period}`.trim(),
+      `婚姻関係破綻に至る経緯、および相手方の不法行為について、以下の通り日々の記録（アプリ「リコログ」による日時・位置情報等の自動記録を含む）に基づき陳述いたします。${period}`.trim(),
     events: sorted.map((log) => {
       const attachments = Array.isArray(log?.attachments) ? log.attachments : [];
       const med = log?.medical || null;
