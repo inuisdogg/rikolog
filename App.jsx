@@ -57,7 +57,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  MoreVertical
+  MoreVertical,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 // --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
@@ -336,9 +338,17 @@ const AuthScreen = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [rememberMe, setRememberMe] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    newPassword: "",
+    confirmPassword: "",
     reason: "性格の不一致",
     targetDate: "",
     situation: ""
@@ -463,12 +473,23 @@ const AuthScreen = ({ onLogin }) => {
 
   const handleSubmit = async () => {
     try {
-      if (!formData.email || !formData.password) {
+      // メールアドレスとパスワードをトリム（前後の空白を削除）
+      const trimmedEmail = formData.email ? formData.email.trim() : '';
+      const trimmedPassword = formData.password ? formData.password.trim() : '';
+
+      if (!trimmedEmail || !trimmedPassword) {
         setError("メールアドレスとパスワードを入力してください");
         return;
       }
 
-      if (formData.password.length < 6) {
+      // メールアドレスの形式を簡易チェック
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        setError("正しいメールアドレス形式で入力してください");
+        return;
+      }
+
+      if (trimmedPassword.length < 6) {
         setError("パスワードは6文字以上で入力してください");
         return;
       }
@@ -479,8 +500,8 @@ const AuthScreen = ({ onLogin }) => {
       if (isRegister) {
         // 新規登録
         const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
+          email: trimmedEmail,
+          password: trimmedPassword,
         });
 
         if (authError) {
@@ -499,7 +520,7 @@ const AuthScreen = ({ onLogin }) => {
           // セッションが確立されている場合、usersテーブルに保存
           try {
             await createUser(authData.user.id, {
-              email: formData.email,
+              email: trimmedEmail,
               reason: formData.reason,
               targetDate: formData.targetDate || null,
               situation: formData.situation || "",
@@ -519,7 +540,7 @@ const AuthScreen = ({ onLogin }) => {
               const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
               if (!existingCredential) {
                 // バックグラウンドで登録を試みる（エラーは無視）
-                registerWebAuthn(authData.user.id, formData.email).catch(err => {
+                registerWebAuthn(authData.user.id, trimmedEmail).catch(err => {
                   console.log("WebAuthn登録スキップ:", err.message);
                 });
               }
@@ -535,13 +556,28 @@ const AuthScreen = ({ onLogin }) => {
         }
       } else {
         // ログイン
+        console.log("ログイン試行:", { email: trimmedEmail, passwordLength: trimmedPassword.length });
+        
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password,
+          email: trimmedEmail,
+          password: trimmedPassword,
+        });
+
+        console.log("認証結果:", { 
+          hasUser: !!authData?.user, 
+          userId: authData?.user?.id,
+          emailConfirmed: authData?.user?.email_confirmed_at ? '確認済み' : '未確認',
+          error: authError 
         });
 
         if (authError) {
-          console.error("ログインエラー:", authError);
+          console.error("ログインエラー詳細:", {
+            message: authError.message,
+            status: authError.status,
+            code: authError.code,
+            name: authError.name,
+            fullError: authError
+          });
           throw authError;
         }
 
@@ -549,12 +585,19 @@ const AuthScreen = ({ onLogin }) => {
           throw new Error("ログインに失敗しました");
         }
 
+        // メール確認の状態をチェック
+        if (!authData.user.email_confirmed_at) {
+          console.warn("メール確認が未完了です");
+          // メール確認が必要な場合でも、セッションが確立されていれば続行を許可
+          // （Supabaseの設定によっては確認不要の場合もある）
+        }
+
         // 30日間保存がチェックされている場合、セッション情報を保存
         if (rememberMe) {
           try {
             const sessionData = {
               userId: authData.user.id,
-              email: formData.email,
+              email: trimmedEmail,
               expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30日後
             };
             localStorage.setItem('riko_remember_me', JSON.stringify(sessionData));
@@ -574,7 +617,7 @@ const AuthScreen = ({ onLogin }) => {
             const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
             if (!existingCredential) {
               // バックグラウンドで登録を試みる（エラーは無視）
-              registerWebAuthn(authData.user.id, formData.email).catch(err => {
+              registerWebAuthn(authData.user.id, trimmedEmail).catch(err => {
                 console.log("WebAuthn登録スキップ:", err.message);
               });
             }
@@ -586,25 +629,56 @@ const AuthScreen = ({ onLogin }) => {
       }
     } catch (error) {
       console.error("認証エラー:", error);
+      console.error("エラー詳細:", {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        name: error.name,
+        fullError: error
+      });
       
       // エラーメッセージを日本語に変換
       let errorMessage = "認証処理中にエラーが発生しました。もう一度お試しください。";
       
-      if (error.message) {
-        const message = error.message.toLowerCase();
-        if (message.includes("invalid login credentials") || message.includes("invalid credentials")) {
-          errorMessage = "メールアドレスまたはパスワードが正しくありません。\n\n※メール確認を無効化した後、既存のユーザーはSupabase Dashboardで手動で確認済みにする必要がある場合があります。";
-        } else if (message.includes("email not confirmed")) {
-          errorMessage = "メールアドレスの確認が必要です。メールを確認してください。\n\n※メール確認を無効化した場合は、Supabase Dashboardでユーザーを確認済みにしてください。";
-        } else if (message.includes("user not found")) {
-          errorMessage = "ユーザーが見つかりません。新規登録を行ってください。";
-        } else if (message.includes("email already registered")) {
-          errorMessage = "このメールアドレスは既に登録されています。ログインしてください。";
-        } else if (message.includes("password")) {
-          errorMessage = "パスワードが正しくありません。";
-        } else {
-          errorMessage = error.message;
-        }
+      // Supabaseのエラーオブジェクトから詳細情報を取得
+      const errorMsg = error.message || '';
+      const errorCode = error.code || error.status || '';
+      const message = errorMsg.toLowerCase();
+      
+      // メール確認が必要な場合
+      if (message.includes("email not confirmed") || 
+          message.includes("email_not_confirmed") ||
+          errorCode === "email_not_confirmed" ||
+          error.status === 400 && message.includes("confirm")) {
+        errorMessage = "メールアドレスの確認が必要です。\n\n登録時に送信されたメールを確認して、メール内のリンクをクリックしてください。\n\n※メール確認を無効化した場合は、Supabase Dashboardでユーザーを確認済みにしてください。";
+      }
+      // 無効な認証情報
+      else if (message.includes("invalid login credentials") || 
+               message.includes("invalid credentials") ||
+               errorCode === "invalid_credentials" ||
+               (error.status === 400 && !message.includes("email not confirmed"))) {
+        // より詳細な診断メッセージを追加
+        errorMessage = "メールアドレスまたはパスワードが正しくありません。\n\n【確認してください】\n1. メールアドレスの入力ミス（スペース、大文字小文字など）\n2. パスワードの入力ミス（大文字・小文字、記号、数字など）\n3. メール確認が未完了の場合、登録メール内のリンクをクリック\n4. Supabase Dashboardでユーザーが確認済みになっているか\n\n【対処方法】\n• パスワードを忘れた場合：新規登録で同じメールアドレスを使用（既存ユーザーは上書きされません）\n• メール確認を無効化した場合：Supabase Dashboard → Authentication → Users で該当ユーザーを確認済みに設定\n\n※コンソール（F12）で詳細なエラー情報を確認できます";
+      }
+      // ユーザーが見つからない
+      else if (message.includes("user not found") || 
+               message.includes("user_not_found") ||
+               errorCode === "user_not_found") {
+        errorMessage = "ユーザーが見つかりません。新規登録を行ってください。";
+      }
+      // メールアドレスが既に登録されている
+      else if (message.includes("email already registered") || 
+               message.includes("user_already_registered") ||
+               errorCode === "user_already_registered") {
+        errorMessage = "このメールアドレスは既に登録されています。ログインしてください。";
+      }
+      // パスワード関連のエラー
+      else if (message.includes("password") && !message.includes("invalid")) {
+        errorMessage = "パスワードが正しくありません。";
+      }
+      // その他のエラー
+      else {
+        errorMessage = `認証エラー: ${errorMsg || '不明なエラーが発生しました'}\n\nエラーコード: ${errorCode || error.status || '不明'}`;
       }
       
       setError(errorMessage);
@@ -658,6 +732,124 @@ const AuthScreen = ({ onLogin }) => {
       throw error;
     }
   };
+
+  // パスワードリセットリクエスト（メール送信）
+  const handleForgotPassword = async () => {
+    try {
+      const trimmedEmail = formData.email ? formData.email.trim() : '';
+      
+      if (!trimmedEmail) {
+        setError("メールアドレスを入力してください");
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        setError("正しいメールアドレス形式で入力してください");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      // リダイレクトURLを設定（現在のURLを使用）
+      const redirectUrl = `${window.location.origin}${window.location.pathname}?type=recovery`;
+      
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: redirectUrl,
+      });
+
+      if (resetError) {
+        console.error("パスワードリセットエラー:", resetError);
+        throw resetError;
+      }
+
+      setResetEmailSent(true);
+    } catch (error) {
+      console.error("パスワードリセットエラー:", error);
+      let errorMessage = "パスワードリセットメールの送信に失敗しました。";
+      
+      if (error.message) {
+        const message = error.message.toLowerCase();
+        if (message.includes("user not found")) {
+          errorMessage = "このメールアドレスは登録されていません。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // パスワードリセット完了（新しいパスワードを設定）
+  const handleResetPassword = async () => {
+    try {
+      if (!formData.newPassword || !formData.confirmPassword) {
+        setError("新しいパスワードと確認用パスワードを入力してください");
+        return;
+      }
+
+      if (formData.newPassword.length < 6) {
+        setError("パスワードは6文字以上で入力してください");
+        return;
+      }
+
+      if (formData.newPassword !== formData.confirmPassword) {
+        setError("パスワードが一致しません");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: formData.newPassword
+      });
+
+      if (updateError) {
+        console.error("パスワード更新エラー:", updateError);
+        throw updateError;
+      }
+
+      // パスワード更新成功後、ログイン画面に戻る
+      setShowResetPassword(false);
+      setFormData({ ...formData, newPassword: "", confirmPassword: "" });
+      setError(null);
+      alert("パスワードが正常に更新されました。新しいパスワードでログインしてください。");
+    } catch (error) {
+      console.error("パスワード更新エラー:", error);
+      let errorMessage = "パスワードの更新に失敗しました。";
+      
+      if (error.message) {
+        const message = error.message.toLowerCase();
+        if (message.includes("token") || message.includes("expired")) {
+          errorMessage = "リセットリンクの有効期限が切れています。再度パスワードリセットをリクエストしてください。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // URLパラメータからリセットトークンを確認
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const type = urlParams.get('type');
+    
+    if (type === 'recovery') {
+      // リセットトークンが含まれている場合、パスワードリセット画面を表示
+      setShowResetPassword(true);
+      // URLをクリーンアップ
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const handleBiometricLogin = async () => {
     setIsBiometricLoading(true);
@@ -741,22 +933,186 @@ const AuthScreen = ({ onLogin }) => {
       </div>
 
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg space-y-3 sm:space-y-4 max-w-md lg:max-w-lg mx-auto w-full">
-        <h2 className="text-base sm:text-lg font-bold text-center mb-3 sm:mb-4 text-slate-800">{isRegister ? "アカウント作成" : "ログイン"}</h2>
-        
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs">
-            {error}
-          </div>
-        )}
+        {showResetPassword ? (
+          // パスワードリセット画面
+          <>
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-lg font-bold text-slate-800">パスワードをリセット</h2>
+              <button 
+                onClick={() => {
+                  setShowResetPassword(false);
+                  setFormData({ ...formData, newPassword: "", confirmPassword: "" });
+                  setError(null);
+                }}
+                className="text-xs text-gray-500 hover:text-slate-900 underline"
+              >
+                ログイン画面に戻る
+              </button>
+            </div>
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs">
+                {error}
+              </div>
+            )}
 
-        {isLoading && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg text-xs text-center">
-            処理中...
-          </div>
-        )}
-        
+            {isLoading && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg text-xs text-center">
+                処理中...
+              </div>
+            )}
 
-          {!isRegister && (
+            <div className="space-y-3">
+              <div className="relative">
+                <input 
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="新しいパスワード（6文字以上）" 
+                  className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 pr-10 rounded text-xs sm:text-sm"
+                  value={formData.newPassword}
+                  onChange={e => setFormData({...formData, newPassword: e.target.value})}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 transition-colors"
+                  aria-label={showNewPassword ? "パスワードを隠す" : "パスワードを表示"}
+                >
+                  {showNewPassword ? (
+                    <EyeOff size={16} />
+                  ) : (
+                    <Eye size={16} />
+                  )}
+                </button>
+              </div>
+              <div className="relative">
+                <input 
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="新しいパスワード（確認用）" 
+                  className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 pr-10 rounded text-xs sm:text-sm"
+                  value={formData.confirmPassword}
+                  onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 transition-colors"
+                  aria-label={showConfirmPassword ? "パスワードを隠す" : "パスワードを表示"}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={16} />
+                  ) : (
+                    <Eye size={16} />
+                  )}
+                </button>
+              </div>
+              
+              <button 
+                onClick={handleResetPassword}
+                disabled={isLoading}
+                className="w-full bg-pink-600 text-white font-bold py-2 sm:py-3 rounded shadow-lg hover:bg-pink-700 transition mt-3 sm:mt-4 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "処理中..." : "パスワードを更新"}
+              </button>
+
+              <button 
+                onClick={() => {
+                  setShowResetPassword(false);
+                  setFormData({ ...formData, newPassword: "", confirmPassword: "" });
+                  setError(null);
+                }}
+                className="w-full text-xs text-gray-500 py-2 hover:text-slate-900"
+              >
+                ログイン画面に戻る
+              </button>
+            </div>
+          </>
+        ) : showForgotPassword ? (
+          // パスワードリセットリクエスト画面
+          <>
+            <h2 className="text-base sm:text-lg font-bold text-center mb-3 sm:mb-4 text-slate-800">パスワードをリセット</h2>
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs">
+                {error}
+              </div>
+            )}
+
+            {resetEmailSent ? (
+              <>
+                <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg text-xs mb-3">
+                  パスワードリセット用のメールを送信しました。\n\nメール内のリンクをクリックして、新しいパスワードを設定してください。
+                </div>
+                <button 
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetEmailSent(false);
+                    setError(null);
+                  }}
+                  className="w-full text-xs text-gray-500 py-2 hover:text-slate-900"
+                >
+                  ログイン画面に戻る
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-600 mb-3">
+                  登録されているメールアドレスを入力してください。パスワードリセット用のリンクを送信します。
+                </p>
+                
+                {isLoading && (
+                  <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg text-xs text-center mb-3">
+                    処理中...
+                  </div>
+                )}
+
+                <input 
+                  type="email" 
+                  placeholder="メールアドレス" 
+                  className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 rounded text-xs sm:text-sm"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                />
+                
+                <button 
+                  onClick={handleForgotPassword}
+                  disabled={isLoading}
+                  className="w-full bg-pink-600 text-white font-bold py-2 sm:py-3 rounded shadow-lg hover:bg-pink-700 transition mt-3 sm:mt-4 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? "送信中..." : "リセットメールを送信"}
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetEmailSent(false);
+                    setError(null);
+                  }}
+                  className="w-full text-xs text-gray-500 py-2 hover:text-slate-900"
+                >
+                  ログイン画面に戻る
+                </button>
+              </>
+            )}
+          </>
+        ) : (
+          // 通常のログイン/登録画面
+          <>
+            <h2 className="text-base sm:text-lg font-bold text-center mb-3 sm:mb-4 text-slate-800">{isRegister ? "アカウント作成" : "ログイン"}</h2>
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs">
+                {error}
+              </div>
+            )}
+
+            {isLoading && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 p-3 rounded-lg text-xs text-center">
+                処理中...
+              </div>
+            )}
+            
+
+              {!isRegister && (
           <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-100">
               <button 
                 onClick={handleBiometricLogin}
@@ -783,27 +1139,50 @@ const AuthScreen = ({ onLogin }) => {
             value={formData.email}
             onChange={e => setFormData({...formData, email: e.target.value})}
           />
-          <input 
-            type="password" 
-            placeholder="パスワード" 
-          className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 rounded text-xs sm:text-sm"
-            value={formData.password}
-            onChange={e => setFormData({...formData, password: e.target.value})}
-          />
+          <div className="relative">
+            <input 
+              type={showPassword ? "text" : "password"}
+              placeholder="パスワード" 
+              className="w-full bg-gray-50 border border-gray-200 p-2 sm:p-3 pr-10 rounded text-xs sm:text-sm"
+              value={formData.password}
+              onChange={e => setFormData({...formData, password: e.target.value})}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 transition-colors"
+              aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
+            >
+              {showPassword ? (
+                <EyeOff size={16} />
+              ) : (
+                <Eye size={16} />
+              )}
+            </button>
+          </div>
 
           {!isRegister && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 text-pink-600 bg-gray-100 border-gray-300 rounded focus:ring-pink-500 focus:ring-2"
-              />
-              <label htmlFor="rememberMe" className="text-xs sm:text-sm text-gray-700 cursor-pointer">
-                30日間ログイン情報を保存する
-              </label>
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 text-pink-600 bg-gray-100 border-gray-300 rounded focus:ring-pink-500 focus:ring-2"
+                />
+                <label htmlFor="rememberMe" className="text-xs sm:text-sm text-gray-700 cursor-pointer">
+                  30日間ログイン情報を保存する
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-xs text-pink-600 hover:text-pink-700 text-right w-full"
+              >
+                パスワードを忘れた場合
+              </button>
+            </>
           )}
 
           {isRegister && (
@@ -850,6 +1229,8 @@ const AuthScreen = ({ onLogin }) => {
           >
             {isRegister ? "ログイン画面へ戻る" : "新規登録はこちら"}
           </button>
+          </>
+        )}
       </div>
     </div>
   );

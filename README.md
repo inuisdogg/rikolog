@@ -9,12 +9,14 @@ cd /Users/inu/Desktop/Riko-Log
 npm run dev
 ```
 
-- デフォルトは **`127.0.0.1`（ローカルのみ）**で起動する想定です。
-- 同一Wi‑Fi等でスマホから確認したい場合は、明示的にホスト公開します：
+**アクセスURL:**
+- ローカル（同じPC）: `http://localhost:5173` または `http://127.0.0.1:5173`
+- ネットワーク経由（スマホなど）: `http://[あなたのIPアドレス]:5173`
+  - IPアドレスの確認方法: ターミナルで `ifconfig | grep "inet " | grep -v 127.0.0.1` を実行
 
-```bash
-npm run dev:host
-```
+**注意:**
+- 現在の設定（`vite.config.js`）では `host: '0.0.0.0'` になっているため、ネットワーク経由でもアクセス可能です
+- ローカルのみにしたい場合は、`vite.config.js` の `host: '0.0.0.0'` を `host: '127.0.0.1'` に変更してください
 
 ### よくあるトラブル
 
@@ -152,7 +154,8 @@ PWA化: ホーム画面に追加してネイティブアプリのように振る
 
 2. **環境変数の設定**
    - プロジェクトルートに `.env` ファイルを作成
-   - Supabase設定値を記入（`SETUP_SUPABASE.md`を参照）
+   - `.env.example` をコピーして `.env` を作成し、Supabase設定値を記入
+   - 詳細は `ENV_SETUP.md` を参照
 
 3. **パッケージのインストール**
    ```bash
@@ -178,6 +181,26 @@ PWA化: ホーム画面に追加してネイティブアプリのように振る
 
 1. Supabaseプロジェクトのセットアップ（`SETUP_SUPABASE.md`を参照）
 2. SQLの実行（テーブル作成）
-3. 環境変数の設定
-4. App.jsxのlocalStorage呼び出しをSupabase呼び出しに置き換え
-5. 認証フローの実装
+3. 環境変数の設定（`ENV_SETUP.md`を参照）
+4. ✅ App.jsxのSupabase統合（認証・ログデータのCRUDは実装済み）
+5. Vercelへのデプロイ（`VERCEL_DEPLOY.md`を参照）
+
+## 8. Vercelデプロイ
+
+本番環境へのデプロイはVercelを使用します。
+
+### デプロイ手順
+
+1. **環境変数の設定**
+   - Vercel Dashboardで環境変数を設定（`ENV_SETUP.md`を参照）
+   - または `VERCEL_DEPLOY.md` の手順に従う
+
+2. **デプロイ**
+   - GitHubにプッシュすると自動デプロイ
+   - または `vercel --prod` コマンドで手動デプロイ
+   - 詳細は `VERCEL_DEPLOY.md` を参照
+
+### 設定ファイル
+
+- `vercel.json` - Vercelの設定ファイル（作成済み）
+- `.env.example` - 環境変数のテンプレート（作成済み）
