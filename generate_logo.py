@@ -68,3 +68,4 @@ create_logo(text, font_file, color_slate, color_transparent, "rikolog_logo_slate
 # 3. アプリアイコン風 (ピンク背景・白文字)
 create_logo(text, font_file, color_white, color_pink, "rikolog_logo_icon.png", is_icon=True)
 
+

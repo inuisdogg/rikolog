@@ -166,3 +166,4 @@ CREATE POLICY "Users can update own messages"
     user_id = '*'
   );
 
+
