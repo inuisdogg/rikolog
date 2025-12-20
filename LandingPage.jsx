@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   ShieldAlert, 
@@ -26,14 +26,80 @@ import {
   Phone,
   Crown,
   Eye,
-  EyeOff
+  EyeOff,
+  Mail,
+  X,
+  Send
 } from 'lucide-react';
+import { supabase } from './supabase.config.js';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState('');
 
   const handleStartClick = () => {
-    navigate('/app');
+    setShowEmailModal(true);
+  };
+
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    // メールアドレスのバリデーション
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('有効なメールアドレスを入力してください');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Supabase Edge Functionを呼び出してメール送信
+      const { data, error: functionError } = await supabase.functions.invoke('send-welcome-email', {
+        body: { 
+          email,
+          appUrl: window.location.origin + '/app'
+        }
+      });
+
+      if (functionError) {
+        // Edge Functionが利用できない場合は、ローカルでメール送信を試行（開発環境用）
+        console.warn('Edge Function error:', functionError);
+        // 開発環境ではメール送信をスキップして成功として扱う
+        if (import.meta.env.DEV) {
+          console.log('開発環境のため、メール送信をスキップします');
+        } else {
+          throw functionError;
+        }
+      }
+
+      setIsSuccess(true);
+      setTimeout(() => {
+        setShowEmailModal(false);
+        setIsSuccess(false);
+        setEmail('');
+        navigate('/app');
+      }, 2000);
+    } catch (err) {
+      console.error('メール送信エラー:', err);
+      setError('メール送信に失敗しました。しばらくしてから再度お試しください。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    if (!isLoading) {
+      setShowEmailModal(false);
+      setEmail('');
+      setError('');
+      setIsSuccess(false);
+    }
   };
 
   return (
@@ -577,6 +643,96 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 sm:p-8 relative">
+            <button
+              onClick={handleCloseModal}
+              disabled={isLoading}
+              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
+            >
+              <X size={20} className="text-gray-500" />
+            </button>
+
+            {!isSuccess ? (
+              <>
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Mail className="text-pink-600" size={32} />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900 mb-2">サービス利用案内を送信</h2>
+                  <p className="text-sm text-gray-600">
+                    メールアドレスを入力してください。<br />
+                    利用方法やログイン情報をお送りします。
+                  </p>
+                </div>
+
+                <form onSubmit={handleEmailSubmit} className="space-y-4">
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-bold text-slate-700 mb-2">
+                      メールアドレス
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="example@email.com"
+                      required
+                      disabled={isLoading}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent disabled:opacity-50"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !email}
+                    className="w-full bg-pink-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-pink-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        送信中...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={18} />
+                        案内メールを送信
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <p className="text-xs text-gray-500 mt-4 text-center">
+                  送信後、アプリ画面に移動します
+                </p>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="text-green-600" size={32} />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">送信完了</h2>
+                <p className="text-sm text-gray-600 mb-6">
+                  メールを送信しました。<br />
+                  メールボックスをご確認ください。
+                </p>
+                <p className="text-xs text-gray-500">
+                  アプリ画面に移動します...
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
