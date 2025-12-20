@@ -75,7 +75,12 @@ import {
   Target,
   Package,
   UserCheck,
-  Gavel
+  Gavel,
+  Square,
+  CheckSquare,
+  Star,
+  HelpCircle,
+  ListChecks
 } from 'lucide-react';
 
 // --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
@@ -257,9 +262,17 @@ async function checkPremiumStatusAsync(userId) {
 // プレミアム状態をチェック（同期版 - 既存コードとの互換性のため）
 // 注意: この関数は後方互換性のため残していますが、実際のチェックは非同期で行う必要があります
 function checkPremiumStatus() {
-  // この関数は後方互換性のため残していますが、実際のチェックは非同期で行う必要があります
-  // 使用箇所を非同期版に置き換えることを推奨
-  return false; // デフォルトは無料プラン
+  // localStorageのプレミアム情報をチェック（テスト用）
+  try {
+    const premium = localStorage.getItem('riko_premium');
+    if (!premium) return false;
+    const data = JSON.parse(premium);
+    if (!data.expiresAt) return false;
+    // 有効期限をチェック
+    return new Date(data.expiresAt) > new Date();
+  } catch {
+    return false;
+  }
 }
 
 // プラン管理ユーティリティ
@@ -269,7 +282,9 @@ const PLAN_TYPES = {
 };
 
 function getUserPlan() {
-  return PLAN_TYPES.FREE; // デフォルトは無料プラン（非同期版を使用することを推奨）
+  // localStorageのプレミアム情報をチェック（テスト用）
+  const isPremium = checkPremiumStatus();
+  return isPremium ? PLAN_TYPES.PREMIUM : PLAN_TYPES.FREE;
 }
 
 // 無料プランの制限
@@ -488,30 +503,31 @@ const AuthScreen = ({ onLogin }) => {
   };
 
   const handleSubmit = async () => {
+    // バリデーション
+    const trimmedEmail = formData.email ? formData.email.trim() : '';
+    const trimmedPassword = formData.password ? formData.password.trim() : '';
+
+    if (!trimmedEmail || !trimmedPassword) {
+      setError("メールアドレスとパスワードを入力してください");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError("正しいメールアドレス形式で入力してください");
+      return;
+    }
+
+    if (trimmedPassword.length < 6) {
+      setError("パスワードは6文字以上で入力してください");
+      return;
+    }
+
+    // ローディング開始
+    setIsLoading(true);
+    setError(null);
+
     try {
-      // メールアドレスとパスワードをトリム（前後の空白を削除）
-      const trimmedEmail = formData.email ? formData.email.trim() : '';
-      const trimmedPassword = formData.password ? formData.password.trim() : '';
-
-      if (!trimmedEmail || !trimmedPassword) {
-        setError("メールアドレスとパスワードを入力してください");
-        return;
-      }
-
-      // メールアドレスの形式を簡易チェック
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(trimmedEmail)) {
-        setError("正しいメールアドレス形式で入力してください");
-        return;
-      }
-
-      if (trimmedPassword.length < 6) {
-        setError("パスワードは6文字以上で入力してください");
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
 
       if (isRegister) {
         // 新規登録
@@ -520,185 +536,154 @@ const AuthScreen = ({ onLogin }) => {
           password: trimmedPassword,
         });
 
-        if (authError) {
-          console.error("新規登録エラー:", authError);
-          throw authError;
-        }
+        if (authError) throw authError;
+        if (!authData.user) throw new Error("ユーザー作成に失敗しました");
 
-        if (!authData.user) {
-          throw new Error("ユーザー作成に失敗しました");
-        }
-
-        // セッションを確認（メール確認が無効な場合はセッションが確立される）
+        // セッション確認
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session) {
-          // セッションが確立されている場合、usersテーブルに保存
-          try {
-            await createUser(authData.user.id, {
-              email: trimmedEmail,
-              reason: formData.reason,
-              targetDate: formData.targetDate || null,
-              situation: formData.situation || "",
-            });
-          } catch (createError) {
-            // ユーザーが既に存在する場合は無視（二重登録防止）
-            if (createError.code !== '23505') { // 23505は重複エラー
-              throw createError;
-            }
-          }
-
-          // ユーザー情報を取得
-          const userProfile = await getUser(authData.user.id);
-          if (userProfile) {
-            // WebAuthn認証情報が未登録の場合、自動的に登録を試みる
-            if (isWebAuthnAvailable()) {
-              const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
-              if (!existingCredential) {
-                // バックグラウンドで登録を試みる（エラーは無視）
-                registerWebAuthn(authData.user.id, trimmedEmail).catch(err => {
-                  console.log("WebAuthn登録スキップ:", err.message);
-                });
-              }
-            }
-            onLogin({ ...userProfile, id: authData.user.id });
-          } else {
-            throw new Error("ユーザー情報の取得に失敗しました");
-          }
-        } else {
-          // メール確認が必要な場合、またはセッションが確立されていない場合
-          // ユーザーは作成されているので、ログイン画面に戻るように案内
+        if (!session) {
           throw new Error("登録は完了しましたが、ログインにはメール確認が必要です。メールを確認してログインしてください。");
         }
-      } else {
-        // ログイン
-        console.log("ログイン試行:", { email: trimmedEmail, passwordLength: trimmedPassword.length });
+
+        // ユーザー情報を作成
+        try {
+          await createUser(authData.user.id, {
+            email: trimmedEmail,
+            reason: formData.reason,
+            targetDate: formData.targetDate || null,
+            situation: formData.situation || "",
+          });
+        } catch (createError) {
+          if (createError.code !== '23505') throw createError; // 重複エラー以外は再スロー
+        }
+
+        // ユーザー情報を取得
+        let userProfile = await getUser(authData.user.id);
+        if (!userProfile) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          userProfile = await getUser(authData.user.id);
+        }
         
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        if (!userProfile) {
+          throw new Error("ユーザー情報の取得に失敗しました");
+        }
+
+        // WebAuthn登録（バックグラウンド）
+        if (isWebAuthnAvailable()) {
+          const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
+          if (!existingCredential) {
+            registerWebAuthn(authData.user.id, trimmedEmail).catch(() => {});
+          }
+        }
+
+        // ログイン成功
+        onLogin({ ...userProfile, id: authData.user.id });
+        return;
+      } else {
+        // ログイン処理（シンプルに）
+        const signInPromise = supabase.auth.signInWithPassword({
           email: trimmedEmail,
           password: trimmedPassword,
         });
 
-        console.log("認証結果:", { 
-          hasUser: !!authData?.user, 
-          userId: authData?.user?.id,
-          emailConfirmed: authData?.user?.email_confirmed_at ? '確認済み' : '未確認',
-          error: authError 
+        // タイムアウト処理（10秒）
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('ログイン処理がタイムアウトしました。ネットワーク接続を確認してください。')), 10000);
         });
 
-        if (authError) {
-          console.error("ログインエラー詳細:", {
-            message: authError.message,
-            status: authError.status,
-            code: authError.code,
-            name: authError.name,
-            fullError: authError
-          });
-          throw authError;
-        }
+        const { data: authData, error: authError } = await Promise.race([
+          signInPromise,
+          timeoutPromise
+        ]);
 
-        if (!authData.user) {
-          throw new Error("ログインに失敗しました");
-        }
+        if (authError) throw authError;
+        if (!authData?.user) throw new Error("ログインに失敗しました");
 
-        // メール確認の状態をチェック
-        if (!authData.user.email_confirmed_at) {
-          console.warn("メール確認が未完了です");
-          // メール確認が必要な場合でも、セッションが確立されていれば続行を許可
-          // （Supabaseの設定によっては確認不要の場合もある）
-        }
-
-        // 30日間保存がチェックされている場合、セッション情報を保存
+        // 30日間保存
         if (rememberMe) {
           try {
-            const sessionData = {
+            localStorage.setItem('riko_remember_me', JSON.stringify({
               userId: authData.user.id,
               email: trimmedEmail,
-              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30日後
-            };
-            localStorage.setItem('riko_remember_me', JSON.stringify(sessionData));
+              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            }));
           } catch (err) {
-            console.error("セッション保存エラー:", err);
+            // 無視
           }
         } else {
-          // チェックが外れている場合は保存情報を削除
           localStorage.removeItem('riko_remember_me');
         }
 
         // ユーザー情報を取得
-        const userProfile = await getUser(authData.user.id);
-        if (userProfile) {
-          // WebAuthn認証情報が未登録の場合、自動的に登録を試みる
-          if (isWebAuthnAvailable()) {
-            const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
-            if (!existingCredential) {
-              // バックグラウンドで登録を試みる（エラーは無視）
-              registerWebAuthn(authData.user.id, trimmedEmail).catch(err => {
-                console.log("WebAuthn登録スキップ:", err.message);
-              });
-            }
+        let userProfile = await getUser(authData.user.id);
+        
+        // ユーザー情報が見つからない場合、作成
+        if (!userProfile) {
+          try {
+            await createUser(authData.user.id, {
+              email: trimmedEmail,
+              reason: "性格の不一致",
+              targetDate: null,
+              situation: "",
+            });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            userProfile = await getUser(authData.user.id);
+          } catch (createError) {
+            // 作成に失敗した場合でも、最小限のユーザー情報で続行
+            userProfile = {
+              id: authData.user.id,
+              email: trimmedEmail,
+              reason: "性格の不一致",
+              target_date: null,
+              situation: "",
+            };
           }
-          onLogin({ ...userProfile, id: authData.user.id });
-        } else {
-          throw new Error("ユーザー情報が見つかりません");
         }
+
+        if (!userProfile) {
+          throw new Error("ユーザー情報の取得に失敗しました");
+        }
+
+        // WebAuthn登録（バックグラウンド）
+        if (isWebAuthnAvailable()) {
+          const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
+          if (!existingCredential) {
+            registerWebAuthn(authData.user.id, trimmedEmail).catch(() => {});
+          }
+        }
+
+        // ログイン成功
+        onLogin({ ...userProfile, id: authData.user.id });
+        return;
       }
     } catch (error) {
-      console.error("認証エラー:", error);
-      console.error("エラー詳細:", {
-        message: error.message,
-        status: error.status,
-        code: error.code,
-        name: error.name,
-        fullError: error
-      });
-      
       // エラーメッセージを日本語に変換
-      let errorMessage = "認証処理中にエラーが発生しました。もう一度お試しください。";
-      
-      // Supabaseのエラーオブジェクトから詳細情報を取得
       const errorMsg = error.message || '';
       const errorCode = error.code || error.status || '';
       const message = errorMsg.toLowerCase();
       
-      // メール確認が必要な場合
-      if (message.includes("email not confirmed") || 
-          message.includes("email_not_confirmed") ||
-          errorCode === "email_not_confirmed" ||
-          error.status === 400 && message.includes("confirm")) {
-        errorMessage = "メールアドレスの確認が必要です。\n\n登録時に送信されたメールを確認して、メール内のリンクをクリックしてください。\n\n※メール確認を無効化した場合は、Supabase Dashboardでユーザーを確認済みにしてください。";
-      }
-      // 無効な認証情報
-      else if (message.includes("invalid login credentials") || 
-               message.includes("invalid credentials") ||
-               errorCode === "invalid_credentials" ||
-               (error.status === 400 && !message.includes("email not confirmed"))) {
-        // より詳細な診断メッセージを追加
-        errorMessage = "メールアドレスまたはパスワードが正しくありません。\n\n【確認してください】\n1. メールアドレスの入力ミス（スペース、大文字小文字など）\n2. パスワードの入力ミス（大文字・小文字、記号、数字など）\n3. メール確認が未完了の場合、登録メール内のリンクをクリック\n4. Supabase Dashboardでユーザーが確認済みになっているか\n\n【対処方法】\n• パスワードを忘れた場合：新規登録で同じメールアドレスを使用（既存ユーザーは上書きされません）\n• メール確認を無効化した場合：Supabase Dashboard → Authentication → Users で該当ユーザーを確認済みに設定\n\n※コンソール（F12）で詳細なエラー情報を確認できます";
-      }
-      // ユーザーが見つからない
-      else if (message.includes("user not found") || 
-               message.includes("user_not_found") ||
-               errorCode === "user_not_found") {
+      let errorMessage = "認証処理中にエラーが発生しました。もう一度お試しください。";
+      
+      if (message.includes("email not confirmed") || message.includes("email_not_confirmed") || errorCode === "email_not_confirmed") {
+        errorMessage = "メールアドレスの確認が必要です。\n\n登録時に送信されたメールを確認して、メール内のリンクをクリックしてください。";
+      } else if (message.includes("invalid login credentials") || message.includes("invalid credentials") || errorCode === "invalid_credentials") {
+        errorMessage = "メールアドレスまたはパスワードが正しくありません。";
+      } else if (message.includes("user not found") || message.includes("user_not_found")) {
         errorMessage = "ユーザーが見つかりません。新規登録を行ってください。";
-      }
-      // メールアドレスが既に登録されている
-      else if (message.includes("email already registered") || 
-               message.includes("user_already_registered") ||
-               errorCode === "user_already_registered") {
+      } else if (message.includes("email already registered") || message.includes("user_already_registered")) {
         errorMessage = "このメールアドレスは既に登録されています。ログインしてください。";
-      }
-      // パスワード関連のエラー
-      else if (message.includes("password") && !message.includes("invalid")) {
-        errorMessage = "パスワードが正しくありません。";
-      }
-      // その他のエラー
-      else {
-        errorMessage = `認証エラー: ${errorMsg || '不明なエラーが発生しました'}\n\nエラーコード: ${errorCode || error.status || '不明'}`;
+      } else if (message.includes("タイムアウト") || message.includes("timeout")) {
+        errorMessage = "接続がタイムアウトしました。ネットワーク接続を確認してください。";
+      } else if (message.includes("network") || message.includes("fetch") || message.includes("failed to fetch")) {
+        errorMessage = "ネットワークエラーが発生しました。インターネット接続を確認してください。";
+      } else if (errorMsg) {
+        errorMessage = `認証エラー: ${errorMsg}`;
       }
       
       setError(errorMessage);
     } finally {
+      // 必ずローディング状態を解除
       setIsLoading(false);
     }
   };
@@ -2111,6 +2096,104 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
   // --- ロードマップモーダル ---
   const [isRoadmapModalOpen, setIsRoadmapModalOpen] = useState(false);
 
+  // --- 離婚準備チェックリスト ---
+  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
+  const [selectedHelpItem, setSelectedHelpItem] = useState(null);
+  
+  // チェックリストのデータ構造
+  const checklistData = [
+    {
+      phase: 1,
+      title: "証拠・情報の確保（同居中にこっそりやること）",
+      color: "blue",
+      items: [
+        { id: "diary", text: "日記をつける", required: true, help: "日々のモラハラ、無視、帰宅時間、不審な行動を記録（このアプリで！）" },
+        { id: "phone_evidence", text: "相手のスマホの証拠確保", required: true, help: "LINE、メール、着信履歴の画面撮影（自分のスマホで撮るのが安全）" },
+        { id: "payslip", text: "給与明細のコピー（直近3ヶ月〜1年分）", required: true, help: "婚姻費用（別居中の生活費）と養育費の算定に必須。" },
+        { id: "tax_doc", text: "源泉徴収票・確定申告書のコピー", required: true, help: "収入証明として重要です。" },
+        { id: "bankbook", text: "相手の預貯金通帳のコピー（全ページ）", required: true, help: "隠し口座がないかチェック。表紙だけでなく中身も全て。" },
+        { id: "insurance", text: "生命保険・学資保険の証券コピー", required: false, help: "解約返戻金も財産分与の対象になるため。" },
+        { id: "real_estate", text: "不動産の権利証・契約書のコピー", required: true, help: "不動産の財産分与に必要です。" },
+        { id: "pension", text: "年金手帳・ねんきん定期便のコピー", required: false, help: "「年金分割」のために必要。" },
+        { id: "debt", text: "借金・ローンの明細書の確保", required: false, help: "マイナスの財産も把握しておく必要がある。" },
+      ]
+    },
+    {
+      phase: 2,
+      title: "子供・親権の準備",
+      color: "purple",
+      items: [
+        { id: "custody", text: "親権をどちらが持つか決める", required: true, help: "実績作りとして、育児日記をつけておくことが重要。" },
+        { id: "child_support", text: "養育費の相場を確認する", required: true, help: "「算定表」を使ってシミュレーションしておく。" },
+        { id: "visitation", text: "面会交流の希望条件を整理する", required: false, help: "頻度、場所、連絡方法など。" },
+        { id: "child_docs", text: "子供のパスポート・母子手帳の確保", required: true, help: "持ち出し忘れると後で揉める筆頭アイテム。" },
+      ]
+    },
+    {
+      phase: 3,
+      title: "別居・新生活の準備（Xデーに向けて）",
+      color: "indigo",
+      items: [
+        { id: "own_account", text: "自分名義の銀行口座を作る", required: true, help: "へそくり（離婚資金）を移動させておく。" },
+        { id: "living_expenses", text: "当面の生活費（最低3ヶ月分）の確保", required: true, help: "別居後の生活を支えるために必要です。" },
+        { id: "housing", text: "別居先の物件探し", required: true, help: "実家か、賃貸か、公営住宅か。" },
+        { id: "job", text: "仕事の確保・就職活動", required: false, help: "正社員、パート、副業など。" },
+        { id: "takeout_list", text: "持ち出しリストの作成", required: true, help: "実印、印鑑カード、身分証、貴金属、思い出の品。" },
+        { id: "credit_card", text: "クレジットカードの作成", required: false, help: "夫の扶養に入っているうちに（姓が変わる前に）自分名義を作っておくと審査に通りやすい。" },
+      ]
+    },
+    {
+      phase: 4,
+      title: "行政・手続き（離婚届提出前後）",
+      color: "pink",
+      items: [
+        { id: "witness", text: "離婚届の証人（2名）の確保", required: true, help: "離婚届提出時に必要です。" },
+        { id: "residence", text: "住民票の異動（転出・転入届）", required: true, help: "別居先への転出届を提出します。" },
+        { id: "child_allowance", text: "児童扶養手当（母子手当）の申請", required: false, help: "所得制限や条件を役所で確認。" },
+        { id: "health_insurance", text: "健康保険の切り替え", required: true, help: "夫の扶養から抜けて、国保または自分の職場の保険へ。" },
+        { id: "name_change", text: "氏名変更の手続き", required: false, help: "運転免許証、銀行口座、パスポート、クレカなど。" },
+      ]
+    }
+  ];
+
+  // チェックリストの進捗をlocalStorageから読み込む
+  const [checklistProgress, setChecklistProgress] = useState(() => {
+    try {
+      const saved = localStorage.getItem('riko_checklist_progress');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // チェックリスト項目のトグル
+  const toggleChecklistItem = (itemId) => {
+    setChecklistProgress(prev => {
+      const newProgress = { ...prev, [itemId]: !prev[itemId] };
+      try {
+        localStorage.setItem('riko_checklist_progress', JSON.stringify(newProgress));
+      } catch {}
+      return newProgress;
+    });
+  };
+
+  // チェックリスト進捗率の計算（useMemoで最適化）
+  const checklistProgressData = useMemo(() => {
+    const allItems = checklistData.flatMap(phase => phase.items);
+    const checkedItems = allItems.filter(item => checklistProgress[item.id]);
+    const requiredItems = allItems.filter(item => item.required);
+    const checkedRequired = requiredItems.filter(item => checklistProgress[item.id]);
+    
+    return {
+      overall: allItems.length > 0 ? Math.round((checkedItems.length / allItems.length) * 100) : 0,
+      required: requiredItems.length > 0 ? Math.round((checkedRequired.length / requiredItems.length) * 100) : 0,
+      total: allItems.length,
+      checked: checkedItems.length,
+      requiredTotal: requiredItems.length,
+      requiredChecked: checkedRequired.length
+    };
+  }, [checklistProgress]);
+
   // --- ホーム画面追加（PWA）偽装選択 ---
   const [isDisguiseModalOpen, setIsDisguiseModalOpen] = useState(false);
   const [disguiseQuery, setDisguiseQuery] = useState('');
@@ -2240,6 +2323,36 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
               className="text-xs font-bold text-blue-700 hover:text-blue-800 underline"
             >
               詳細を見る →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 離婚準備チェックリスト */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl shadow-sm p-4">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 bg-green-500 rounded-full p-2">
+            <ListChecks size={18} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs font-bold text-green-900">離婚準備チェックリスト</div>
+              <div className="text-xs font-bold text-green-700">{checklistProgressData.overall}%</div>
+            </div>
+            <div className="w-full bg-green-200 rounded-full h-2 mb-2">
+              <div 
+                className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${checklistProgressData.overall}%` }}
+              />
+            </div>
+            <div className="text-xs text-slate-700 leading-relaxed mb-2">
+              4つのフェーズで進める離婚準備のチェックリスト。進捗を管理して準備を進めましょう。
+            </div>
+            <button
+              onClick={() => setIsChecklistModalOpen(true)}
+              className="text-xs font-bold text-green-700 hover:text-green-800 underline"
+            >
+              チェックリストを開く →
             </button>
           </div>
         </div>
@@ -2807,6 +2920,128 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
         </div>
       )}
 
+      {/* 離婚準備チェックリストモーダル */}
+      {isChecklistModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setIsChecklistModalOpen(false)} />
+            <div className="relative w-full sm:max-w-2xl lg:max-w-4xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-green-50 to-emerald-50">
+                <div className="flex-1">
+                  <div className="text-base font-bold text-green-900 flex items-center gap-2">
+                    <ListChecks size={20} /> 離婚準備チェックリスト
+                  </div>
+                  <div className="text-xs text-green-700 mt-1">あなたの離婚準備レベル: {checklistProgressData.overall}%</div>
+                </div>
+                <button
+                  onClick={() => setIsChecklistModalOpen(false)}
+                  className="p-2 rounded-full hover:bg-white/50 text-gray-600"
+                  title="閉じる"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 p-4 sm:p-6">
+                {/* 進捗サマリー */}
+                <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-bold text-green-900">全体進捗</div>
+                    <div className="text-lg font-bold text-green-700">{checklistProgressData.overall}%</div>
+                  </div>
+                  <div className="w-full bg-green-200 rounded-full h-3 mb-2">
+                    <div 
+                      className="bg-green-600 h-3 rounded-full transition-all duration-300"
+                      style={{ width: `${checklistProgressData.overall}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    {checklistProgressData.checked} / {checklistProgressData.total} 項目完了
+                    {checklistProgressData.requiredTotal > 0 && (
+                      <span className="ml-2">
+                        （必須項目: {checklistProgressData.requiredChecked} / {checklistProgressData.requiredTotal}）
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* チェックリスト */}
+                <div className="space-y-6">
+                  {checklistData.map((phase) => {
+                    const phaseColor = {
+                      blue: { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-900', icon: 'text-blue-600' },
+                      purple: { bg: 'bg-purple-50', border: 'border-purple-500', text: 'text-purple-900', icon: 'text-purple-600' },
+                      indigo: { bg: 'bg-indigo-50', border: 'border-indigo-500', text: 'text-indigo-900', icon: 'text-indigo-600' },
+                      pink: { bg: 'bg-pink-50', border: 'border-pink-500', text: 'text-pink-900', icon: 'text-pink-600' },
+                    }[phase.color] || phaseColor.blue;
+
+                    return (
+                      <div key={phase.phase} className={`${phaseColor.bg} border-l-4 ${phaseColor.border} rounded-r-lg p-4 shadow-sm`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className={`${phaseColor.border.replace('border-', 'bg-')} text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm shrink-0`}>
+                            {phase.phase}
+                          </div>
+                          <div className={`font-bold ${phaseColor.text} flex-1`}>{phase.title}</div>
+                        </div>
+                        <div className="space-y-2 ml-9">
+                          {phase.items.map((item) => {
+                            const isChecked = checklistProgress[item.id] || false;
+                            return (
+                              <div key={item.id} className="flex items-start gap-2.5">
+                                <button
+                                  onClick={() => toggleChecklistItem(item.id)}
+                                  className="shrink-0 mt-0.5"
+                                >
+                                  {isChecked ? (
+                                    <CheckSquare size={18} className="text-green-600" />
+                                  ) : (
+                                    <Square size={18} className="text-gray-400" />
+                                  )}
+                                </button>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs ${isChecked ? 'line-through text-gray-500' : 'text-slate-900'}`}>
+                                      {item.text}
+                                    </span>
+                                    {item.required && (
+                                      <span className="text-red-600 text-xs font-bold">★必須</span>
+                                    )}
+                                    {item.help && (
+                                      <button
+                                        onClick={() => setSelectedHelpItem(selectedHelpItem === item.id ? null : item.id)}
+                                        className="shrink-0"
+                                      >
+                                        <HelpCircle size={14} className="text-blue-500 hover:text-blue-700" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  {selectedHelpItem === item.id && item.help && (
+                                    <div className="mt-1 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-slate-700">
+                                      {item.help}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-4 border-t bg-white">
+                <button
+                  onClick={() => setIsChecklistModalOpen(false)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-3 rounded-lg text-sm shadow"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       {/* メインステータスカード: 安心感のあるピンク×スレート基調 */}
       <div className="bg-slate-800 text-white p-5 rounded-xl shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 p-4 opacity-5">
@@ -3171,55 +3406,51 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
         </div>
       </button>
 
-      {/* 弁護士に相談する - プレミアム会員は非表示 */}
-      {!isPremium && (
-          <a
-            href="https://www.bengo4.com/"
-            target="_blank"
-            rel="noopener noreferrer"
+      {/* 弁護士に相談する */}
+      <a
+        href="https://www.bengo4.com/"
+        target="_blank"
+        rel="noopener noreferrer"
         className="block bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
-          >
-            <div className="flex items-start justify-between gap-3">
+      >
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <Users size={16} className="text-blue-600" /> 弁護士に相談する
-                </div>
+            </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
               記録をもとに、専門家に早めに相談して方針を整理する。多くの事務所で初回相談無料。
-                </div>
+            </div>
             <div className="text-xs text-blue-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
-              </div>
+            </div>
           </div>
           <ChevronRight size={20} className="text-blue-400 shrink-0 mt-1" />
-            </div>
-          </a>
-      )}
+        </div>
+      </a>
 
-      {/* 浮気調査を依頼する - プレミアム会員は非表示 */}
-      {!isPremium && (
-          <a
-            href="https://www.private-eye.jp/"
-            target="_blank"
-            rel="noopener noreferrer"
+      {/* 浮気調査を依頼する */}
+      <a
+        href="https://www.private-eye.jp/"
+        target="_blank"
+        rel="noopener noreferrer"
         className="block bg-purple-50 border border-purple-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
-          >
-            <div className="flex items-start justify-between gap-3">
+      >
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <User size={16} className="text-purple-600" /> 浮気調査を依頼する
-                </div>
+            </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
               不貞の立証が必要なケース向けに、専門家に依頼できます。GPS調査、行動調査など、様々な調査方法があります。
-                </div>
+            </div>
             <div className="text-xs text-purple-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
-              </div>
+            </div>
           </div>
           <ChevronRight size={20} className="text-purple-400 shrink-0 mt-1" />
-            </div>
-          </a>
-      )}
+        </div>
+      </a>
 
       {/* 離婚後の生活支援 */}
             <button
@@ -3268,6 +3499,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
 
 // --- 5. 提出用PDFプレビュー画面 ---
 const ExportView = ({ logs, userProfile, onShowPremium }) => {
+  const [authorName, setAuthorName] = useState(''); // PDF出力時の申立人名
   const isPremium = checkPremiumStatus();
   const userPlan = getUserPlan();
   const isFreePlan = userPlan === PLAN_TYPES.FREE;
@@ -3286,14 +3518,14 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
   const effectiveLogs = logs && logs.length > 0 ? logs : sampleLogs;
     const statementData = useMemo(
     () => {
-      const baseData = buildStatementDataFromLogs({ logs: effectiveLogs, userProfile });
+      const baseData = buildStatementDataFromLogs({ logs: effectiveLogs, userProfile, authorName });
       return {
         ...baseData,
         isFreePlan,
         watermark: isFreePlan ? FREE_PLAN_LIMITS.PDF_WATERMARK : undefined,
       };
     },
-    [effectiveLogs, userProfile, isFreePlan]
+    [effectiveLogs, userProfile, isFreePlan, authorName]
     );
 
   // 無料プランでは1ページ目のみのため、ファイル名に「サンプル」を追加
@@ -3310,7 +3542,30 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
         記録されたデータを、裁判所提出用の<strong>陳述書フォーマット</strong>として出力します。
         <br />
         <span className="text-pink-600">※表示中のプレビューと実際のPDFは同一のフォーマットです。</span>
+        {isFreePlan && (
+          <>
+            <br />
+            <span className="text-yellow-700">※無料プランでは、プレビュー（サンプル）のみご覧いただけます。PDF出力はプレミアムプラン限定です。</span>
+          </>
+        )}
       </p>
+
+      {/* 申立人名入力 */}
+      <div className="mb-4">
+        <label className="block text-xs font-bold text-gray-700 mb-2">
+          申立人名（実名）<span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={authorName}
+          onChange={(e) => setAuthorName(e.target.value)}
+          placeholder={userProfile?.name || userProfile?.email || "申立人のお名前を入力してください"}
+          className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+        />
+        <p className="text-[10px] text-gray-500 mt-1">
+          ※PDFに記載される申立人名です。実名を入力してください。
+        </p>
+      </div>
 
       {/* 無料プラン時の制限通知 */}
       {isFreePlan && (
@@ -3318,11 +3573,11 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
           <div className="flex items-start gap-2">
             <Crown size={16} className="text-yellow-600 mt-0.5" />
             <div className="flex-1">
-              <div className="text-sm font-bold text-yellow-900 mb-1">無料プランの制限</div>
+              <div className="text-sm font-bold text-yellow-900 mb-1">PDF出力はプレミアムプラン限定です</div>
               <div className="text-xs text-yellow-800 leading-relaxed">
-                無料プランでは、<strong>1ページ目のみ</strong>出力可能です。また、PDFには「<strong>SAMPLE</strong>」という透かしが入ります。
+                無料プランでは、陳述書の<strong>プレビュー（サンプル）のみ</strong>ご覧いただけます。プレビューには「<strong>SAMPLE</strong>」という透かしが入ります。
                 <br />
-                全ページ出力・透かしなしの正式版をご希望の場合は、プレミアムプランへのアップグレードが必要です。
+                PDF出力機能をご利用いただくには、プレミアムプランへのアップグレードが必要です。
               </div>
             </div>
           </div>
@@ -3351,32 +3606,45 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
       </div>
 
       <div className="mt-4">
-        <PDFDownloadLink
-          document={<StatementDocument data={statementData} />}
-          fileName={fileName}
-          className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded shadow-lg flex items-center justify-center gap-2"
-        >
-          {({ loading }) => (
-            <>
-              <FileText size={18} /> {loading ? "PDF生成中…" : isFreePlan ? "PDFファイルを出力する（1ページ目・透かし付き）" : "PDFファイルを出力する"}
-        </>
-      )}
-        </PDFDownloadLink>
-        <p className="text-[10px] text-center text-gray-500 mt-2">
-          {isFreePlan 
-            ? "※無料プランでは1ページ目のみ、透かし付きで出力されます。"
-            : "※端末にPDFとして保存されます。コンビニ等で印刷可能です。"
-          }
-        </p>
-        {isFreePlan && (
-          <div className="mt-3">
-            <button
-              onClick={onShowPremium}
-              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+        {isFreePlan ? (
+          /* 無料プラン：PDF出力ボタンを非表示、プレミアムプランへの誘導を表示 */
+          <>
+            <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <Crown size={24} className="mx-auto mb-2 text-yellow-600" />
+              <p className="text-sm font-bold text-gray-700 mb-2">PDF出力はプレミアムプラン限定です</p>
+              <p className="text-xs text-gray-600 mb-4">
+                無料プランでは、プレビュー（サンプル）のみご覧いただけます。
+                <br />
+                PDF出力機能をご利用いただくには、プレミアムプランへのアップグレードが必要です。
+              </p>
+              {onShowPremium && (
+                <button
+                  onClick={onShowPremium}
+                  className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg text-sm flex items-center justify-center gap-2 shadow-lg hover:from-yellow-600 hover:to-orange-600 transition-colors"
+                >
+                  <Crown size={16} /> プレミアムプランでPDF出力を利用する
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          /* プレミアムプラン：PDF出力ボタンを表示 */
+          <>
+            <PDFDownloadLink
+              document={<StatementDocument data={statementData} />}
+              fileName={fileName}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded shadow-lg flex items-center justify-center gap-2"
             >
-              <Crown size={14} /> プレミアムプランで全ページ出力・透かしなし版を利用する
-            </button>
-          </div>
+              {({ loading }) => (
+                <>
+                  <FileText size={18} /> {loading ? "PDF生成中…" : "PDFファイルを出力する"}
+                </>
+              )}
+            </PDFDownloadLink>
+            <p className="text-[10px] text-center text-gray-500 mt-2">
+              ※端末にPDFとして保存されます。コンビニ等で印刷可能です。
+            </p>
+          </>
         )}
       </div>
     </div>
@@ -3443,8 +3711,7 @@ const BoardView = () => {
       return Array.isArray(parsed)
         ? parsed.map((p) => ({
             ...p,
-            category: p.category || 'other', // 既存の投稿にはデフォルトカテゴリを設定
-            reactions: p.reactions || { like: 0, thumbsUp: 0 },
+            category: p.category || 'other',
             replies: Array.isArray(p.replies) ? p.replies : [],
           }))
         : [];
@@ -3453,10 +3720,10 @@ const BoardView = () => {
     }
   });
   const [showForm, setShowForm] = useState(false);
-  const [newPost, setNewPost] = useState({ title: '', content: '', author: '匿名', category: 'other' });
+  const [newPost, setNewPost] = useState({ title: '', content: '', author: '', category: 'other' });
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [replyContent, setReplyContent] = useState('');
-  const [replyAuthor, setReplyAuthor] = useState('匿名');
+  const [replyAuthor, setReplyAuthor] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -3475,16 +3742,15 @@ const BoardView = () => {
       id: 'post_' + Date.now(),
       title: newPost.title.trim(),
       content: newPost.content.trim(),
-      author: (newPost.author || '匿名').trim() || '匿名',
+      author: (newPost.author || '').trim() || '匿名',
       category: newPost.category || 'other',
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: new Date().toISOString(),
-      reactions: { like: 0, thumbsUp: 0 },
       replies: [],
     };
     persist([post, ...posts]);
-    setNewPost({ title: '', content: '', author: '匿名', category: 'other' });
+    setNewPost({ title: '', content: '', author: '', category: 'other' });
     setShowForm(false);
   };
 
@@ -3511,21 +3777,12 @@ const BoardView = () => {
     return filtered;
   }, [posts, selectedCategory, searchQuery]);
 
-  const handleReaction = (postId, key) => {
-    const next = posts.map((p) =>
-      p.id === postId
-        ? { ...p, reactions: { ...(p.reactions || {}), [key]: (p.reactions?.[key] || 0) + 1 } }
-        : p
-    );
-    persist(next);
-  };
-
   const handleSubmitReply = (postId) => {
     if (!replyContent.trim()) return alert('返信内容を入力してください。');
     const reply = {
       id: 'reply_' + Date.now(),
       content: replyContent.trim(),
-      author: replyAuthor.trim() || '匿名',
+      author: (replyAuthor || '').trim() || '匿名',
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: new Date().toISOString(),
@@ -3534,7 +3791,7 @@ const BoardView = () => {
     persist(next);
     setSelectedPostId(null);
     setReplyContent('');
-    setReplyAuthor('匿名');
+    setReplyAuthor('');
   };
 
   return (
@@ -3607,42 +3864,48 @@ const BoardView = () => {
       </div>
 
       {showForm && (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-4 space-y-2">
-          <input
-            type="text"
-            placeholder="タイトル"
-            value={newPost.title}
-            onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-sm"
-          />
-          <textarea
-            placeholder="内容を入力してください"
-            value={newPost.content}
-            onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-sm h-24"
-          />
+        <div className="bg-white p-5 rounded-2xl shadow-md border border-gray-200 mb-4 space-y-4">
           <div>
-            <label className="block text-xs font-bold text-gray-600 mb-1">カテゴリ</label>
-            <select
-              value={newPost.category}
-              onChange={(e) => setNewPost({ ...newPost, category: e.target.value })}
-              className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-sm"
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              タイトル
+            </label>
+            <input
+              type="text"
+              placeholder="投稿のタイトルを入力"
+              value={newPost.title}
+              onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="投稿者名（任意・匿名可）"
-            value={newPost.author}
-            onChange={(e) => setNewPost({ ...newPost, author: e.target.value })}
-            className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-sm"
-          />
-          <button onClick={handleSubmitPost} className="w-full bg-slate-900 text-white font-bold py-2 rounded">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              内容
+            </label>
+            <textarea
+              placeholder="投稿内容を入力してください"
+              value={newPost.content}
+              onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-sm h-32 resize-none focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <User size={16} className="text-gray-500" />
+              ハンドルネーム
+              <span className="text-xs font-normal text-gray-400">（任意・未入力で匿名）</span>
+            </label>
+            <input
+              type="text"
+              placeholder="匿名"
+              value={newPost.author}
+              onChange={(e) => setNewPost({ ...newPost, author: e.target.value })}
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+            />
+          </div>
+          <button 
+            onClick={handleSubmitPost} 
+            className="w-full bg-gradient-to-r from-pink-600 to-pink-500 text-white font-bold py-3 rounded-lg shadow-md hover:shadow-lg hover:from-pink-700 hover:to-pink-600 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
             投稿する
           </button>
         </div>
@@ -3663,6 +3926,19 @@ const BoardView = () => {
         ) : (
           filteredPosts.map((post) => {
             const categoryInfo = categories.find((cat) => cat.id === post.category) || categories[categories.length - 1];
+            const allReplies = [
+              {
+                ...post,
+                isFirst: true,
+                replyNumber: 1,
+              },
+              ...(post.replies || []).map((r, idx) => ({
+                ...r,
+                isFirst: false,
+                replyNumber: idx + 2,
+              }))
+            ];
+            
             return (
               <div key={post.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex justify-between items-start mb-2">
@@ -3679,68 +3955,86 @@ const BoardView = () => {
                 <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{post.content}</p>
                 <div className="text-xs text-gray-500 mb-3">投稿者: {post.author}</div>
 
-              <div className="flex items-center gap-4 mb-3 pb-3 border-b border-gray-100">
-                <button onClick={() => handleReaction(post.id, 'like')} className="flex items-center gap-1 text-gray-600 hover:text-pink-600 transition">
-                  <Heart size={16} /> <span className="text-xs">{post.reactions?.like || 0}</span>
-                </button>
-                <button onClick={() => handleReaction(post.id, 'thumbsUp')} className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition">
-                  <ThumbsUp size={16} /> <span className="text-xs">{post.reactions?.thumbsUp || 0}</span>
-                </button>
-                <button
-                  onClick={() => setSelectedPostId(selectedPostId === post.id ? null : post.id)}
-                  className="flex items-center gap-1 text-gray-600 hover:text-slate-900 transition"
-                >
-                  <Reply size={16} /> <span className="text-xs">返信</span>
-                  {post.replies?.length ? <span className="text-xs text-gray-400">({post.replies.length})</span> : null}
-                </button>
-              </div>
-
-              {selectedPostId === post.id && (
-                <div className="bg-gray-50 p-3 rounded-lg mb-3">
-                  <textarea
-                    placeholder="返信内容を入力してください"
-                    value={replyContent}
-                    onChange={(e) => setReplyContent(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded p-2 text-sm h-20 mb-2"
-                  />
-                  <input
-                    type="text"
-                    placeholder="投稿者名（任意・匿名可）"
-                    value={replyAuthor}
-                    onChange={(e) => setReplyAuthor(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded p-2 text-sm mb-2"
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={() => handleSubmitReply(post.id)} className="flex-1 bg-slate-900 text-white text-xs font-bold py-2 rounded">
-                      返信する
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedPostId(null);
-                        setReplyContent('');
-                        setReplyAuthor('匿名');
-                      }}
-                      className="px-4 bg-gray-200 text-gray-700 text-xs font-bold py-2 rounded"
-                    >
-                      キャンセル
-                    </button>
-                  </div>
+                <div className="flex items-center gap-4 mb-3 pb-3 border-b border-gray-100">
+                  <button
+                    onClick={() => setSelectedPostId(selectedPostId === post.id ? null : post.id)}
+                    className="flex items-center gap-1 text-gray-600 hover:text-slate-900 transition"
+                  >
+                    <Reply size={16} /> <span className="text-xs">返信</span>
+                    {post.replies?.length ? <span className="text-xs text-gray-400">({post.replies.length})</span> : null}
+                  </button>
                 </div>
-              )}
 
-              {post.replies?.length ? (
-                <div className="space-y-2 mt-3 pl-3 border-l-2 border-gray-200">
-                  {post.replies.map((r) => (
-                    <div key={r.id} className="bg-gray-50 p-2 rounded text-xs">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-bold text-gray-700">{r.author}</span>
-                        <span className="text-gray-400">{r.date} {r.time}</span>
-                      </div>
-                      <p className="text-gray-600 whitespace-pre-wrap">{r.content}</p>
+                {selectedPostId === post.id && (
+                  <div className="bg-gray-50 p-3 rounded-lg mb-3">
+                    <textarea
+                      placeholder="返信内容を入力してください"
+                      value={replyContent}
+                      onChange={(e) => setReplyContent(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded p-2 text-sm h-20 mb-2"
+                    />
+                    <input
+                      type="text"
+                      placeholder="投稿者名（任意・匿名可）"
+                      value={replyAuthor}
+                      onChange={(e) => setReplyAuthor(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded p-2 text-sm mb-2"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => handleSubmitReply(post.id)} className="flex-1 bg-slate-900 text-white text-xs font-bold py-2 rounded">
+                        返信する
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedPostId(null);
+                          setReplyContent('');
+                          setReplyAuthor('');
+                        }}
+                        className="px-4 bg-gray-200 text-gray-700 text-xs font-bold py-2 rounded"
+                      >
+                        キャンセル
+                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : null}
+                  </div>
+                )}
+
+                {post.replies?.length ? (
+                  <div className="space-y-2 mt-3">
+                    {allReplies.map((reply) => (
+                      <div 
+                        key={reply.id} 
+                        id={`res-${reply.replyNumber}`}
+                        className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0">
+                            <div className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-1 rounded min-w-[2.5rem] text-center">
+                              {reply.replyNumber}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {reply.author || '匿名'}
+                              </span>
+                              {reply.isFirst && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-pink-100 text-pink-700 rounded font-bold">
+                                  スレ主
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-400">
+                                {reply.date} {reply.time}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+                              {reply.content}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             );
           })
@@ -4181,6 +4475,7 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
   const [dateTo, setDateTo] = useState('');
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest', 'oldest', 'dateAsc', 'dateDesc'
   const [showFilters, setShowFilters] = useState(false);
+  const [authorName, setAuthorName] = useState(''); // PDF出力時の申立人名
 
   const isPremium = checkPremiumStatus();
   const userPlan = getUserPlan();
@@ -4319,14 +4614,14 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
 
   const statementData = useMemo(
     () => {
-      const baseData = buildStatementDataFromLogs({ logs: effectiveLogs, userProfile });
+      const baseData = buildStatementDataFromLogs({ logs: effectiveLogs, userProfile, authorName });
       return {
         ...baseData,
         isFreePlan,
         watermark: isFreePlan ? FREE_PLAN_LIMITS.PDF_WATERMARK : undefined,
       };
     },
-    [effectiveLogs, userProfile, isFreePlan]
+    [effectiveLogs, userProfile, isFreePlan, authorName]
   );
 
   // 無料プランでは1ページ目のみのため、ファイル名に「サンプル」を追加
@@ -4374,6 +4669,12 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
           >
             <FileText size={16} className="inline-block mr-1" />
             PDF出力
+            {!isPremium && (
+              <span className="ml-1 text-[10px] bg-yellow-500 text-white px-1.5 py-0.5 rounded-full">
+                <Crown size={10} className="inline-block mr-0.5" />
+                プレミアム
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -4623,7 +4924,30 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
                 記録されたデータを、裁判所提出用の<strong>陳述書フォーマット</strong>として出力します。
                 <br />
                 <span className="text-pink-600">※表示中のプレビューと実際のPDFは同一のフォーマットです。</span>
+                {isFreePlan && (
+                  <>
+                    <br />
+                    <span className="text-yellow-700">※無料プランでは、プレビュー（サンプル）のみご覧いただけます。PDF出力はプレミアムプラン限定です。</span>
+                  </>
+                )}
               </p>
+
+              {/* 申立人名入力 */}
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-700 mb-2">
+                  申立人名（実名）<span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={authorName}
+                  onChange={(e) => setAuthorName(e.target.value)}
+                  placeholder={userProfile?.name || userProfile?.email || "申立人のお名前を入力してください"}
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  ※PDFに記載される申立人名です。実名を入力してください。
+                </p>
+              </div>
 
               {/* 無料プラン時の制限通知 */}
               {isFreePlan && (
@@ -4631,11 +4955,11 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
                   <div className="flex items-start gap-2">
                     <Crown size={16} className="text-yellow-600 mt-0.5" />
                     <div className="flex-1">
-                      <div className="text-sm font-bold text-yellow-900 mb-1">無料プランの制限</div>
+                      <div className="text-sm font-bold text-yellow-900 mb-1">PDF出力はプレミアムプラン限定です</div>
                       <div className="text-xs text-yellow-800 leading-relaxed">
-                        無料プランでは、<strong>1ページ目のみ</strong>出力可能です。また、PDFには「<strong>SAMPLE</strong>」という透かしが入ります。
+                        無料プランでは、陳述書の<strong>プレビュー（サンプル）のみ</strong>ご覧いただけます。プレビューには「<strong>SAMPLE</strong>」という透かしが入ります。
                         <br />
-                        全ページ出力・透かしなしの正式版をご希望の場合は、プレミアムプランへのアップグレードが必要です。
+                        PDF出力機能をご利用いただくには、プレミアムプランへのアップグレードが必要です。
                       </div>
                     </div>
                   </div>
@@ -4665,32 +4989,45 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
 
               {/* PDFダウンロードボタン */}
               <div className="mt-4">
-                <PDFDownloadLink
-                  document={<StatementDocument data={statementData} />}
-                  fileName={fileName}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded shadow-lg flex items-center justify-center gap-2"
-                >
-                  {({ loading }) => (
-                    <>
-                      <FileText size={18} /> {loading ? "PDF生成中…" : isFreePlan ? "PDFファイルを出力する（1ページ目・透かし付き）" : "PDFファイルを出力する"}
-                    </>
-                  )}
-                </PDFDownloadLink>
-                <p className="text-[10px] text-center text-gray-500 mt-2">
-                  {isFreePlan 
-                    ? "※無料プランでは1ページ目のみ、透かし付きで出力されます。"
-                    : "※端末にPDFとして保存されます。コンビニ等で印刷可能です。"
-                  }
-                </p>
-                {isFreePlan && onShowPremium && (
-                  <div className="mt-3">
-                    <button
-                      onClick={onShowPremium}
-                      className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+                {isFreePlan ? (
+                  /* 無料プラン：PDF出力ボタンを非表示、プレミアムプランへの誘導を表示 */
+                  <>
+                    <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                      <Crown size={24} className="mx-auto mb-2 text-yellow-600" />
+                      <p className="text-sm font-bold text-gray-700 mb-2">PDF出力はプレミアムプラン限定です</p>
+                      <p className="text-xs text-gray-600 mb-4">
+                        無料プランでは、プレビュー（サンプル）のみご覧いただけます。
+                        <br />
+                        PDF出力機能をご利用いただくには、プレミアムプランへのアップグレードが必要です。
+                      </p>
+                      {onShowPremium && (
+                        <button
+                          onClick={onShowPremium}
+                          className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg text-sm flex items-center justify-center gap-2 shadow-lg hover:from-yellow-600 hover:to-orange-600 transition-colors"
+                        >
+                          <Crown size={16} /> プレミアムプランでPDF出力を利用する
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  /* プレミアムプラン：PDF出力ボタンを表示 */
+                  <>
+                    <PDFDownloadLink
+                      document={<StatementDocument data={statementData} />}
+                      fileName={fileName}
+                      className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded shadow-lg flex items-center justify-center gap-2"
                     >
-                      <Crown size={14} /> プレミアムプランで全ページ出力・透かしなし版を利用する
-                    </button>
-                  </div>
+                      {({ loading }) => (
+                        <>
+                          <FileText size={18} /> {loading ? "PDF生成中…" : "PDFファイルを出力する"}
+                        </>
+                      )}
+                    </PDFDownloadLink>
+                    <p className="text-[10px] text-center text-gray-500 mt-2">
+                      ※端末にPDFとして保存されます。コンビニ等で印刷可能です。
+                    </p>
+                  </>
                 )}
               </div>
             </div>
@@ -5568,6 +5905,84 @@ const PremiumPlanView = ({ user, onClose }) => {
           </div>
         </div>
       )}
+
+      {/* 開発者モード（テスト用）- 開発環境でのみ表示 */}
+      {import.meta.env.DEV && (
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
+            <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-2">
+              <Database size={14} />
+              開発者モード（テスト用）
+            </div>
+            <p className="text-[10px] text-gray-600 mb-3">
+              スマホのPWAからテストする際に使用します。プレミアムプランの状態を簡単に切り替えられます。
+              <br />
+              <span className="text-red-600 font-bold">※本番環境では表示されません</span>
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  const expiresAt = new Date();
+                  expiresAt.setMonth(expiresAt.getMonth() + 1);
+                  const newPremiumData = {
+                    subscribedAt: new Date().toISOString(),
+                    expiresAt: expiresAt.toISOString(),
+                    planPrice: 450,
+                    status: 'active'
+                  };
+                  localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+                  setPremiumData(newPremiumData);
+                  setIsPremium(true);
+                  alert('✅ プレミアムプランに設定しました！\nページをリロードしてください。');
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+              >
+                <CheckCircle size={14} /> プレミアムプランを有効化（1ヶ月）
+              </button>
+              <button
+                onClick={() => {
+                  const newPremiumData = {
+                    subscribedAt: new Date().toISOString(),
+                    expiresAt: null, // 無期限
+                    planPrice: 450,
+                    status: 'active'
+                  };
+                  localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+                  setPremiumData(newPremiumData);
+                  setIsPremium(true);
+                  alert('✅ プレミアムプラン（無期限）に設定しました！\nページをリロードしてください。');
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+              >
+                <Crown size={14} /> プレミアムプランを有効化（無期限）
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('プレミアムプランを解除して無料プランに戻しますか？')) {
+                    localStorage.removeItem('riko_premium');
+                    setPremiumData(null);
+                    setIsPremium(false);
+                    alert('✅ プレミアムプランを解除しました（無料プランに戻りました）\nページをリロードしてください。');
+                  }
+                }}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+              >
+                <XCircle size={14} /> プレミアムプランを解除（無料プランに戻す）
+              </button>
+              <div className="mt-2 text-center">
+                <button
+                  onClick={() => {
+                    window.location.reload();
+                  }}
+                  className="text-xs text-gray-600 underline"
+                >
+                  ページをリロード
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
     );
 };
@@ -5812,17 +6227,127 @@ export default function App() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // デフォルトでfalseにして、最初から電卓画面を表示
 
   // 認証状態の監視
   useEffect(() => {
+    let timeoutId;
+    let isMounted = true;
+
     // セッションを確認
     const checkSession = async () => {
       try {
         console.log("セッション確認を開始...");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        console.log("Supabase URL:", supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : '未設定');
+        console.log("Supabase Key:", import.meta.env.VITE_SUPABASE_ANON_KEY ? '設定済み' : '未設定');
+        
+        // まず直接fetchでSupabaseへの接続をテスト（5秒タイムアウト）
+        if (supabaseUrl) {
+          try {
+            console.log("Supabaseへの直接接続をテスト...");
+            const controller = new AbortController();
+            const fetchTimeout = setTimeout(() => controller.abort(), 5000);
+            const testResponse = await fetch(`${supabaseUrl}/rest/v1/`, {
+              method: 'GET',
+              headers: {
+                'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+              },
+              signal: controller.signal
+            });
+            clearTimeout(fetchTimeout);
+            console.log("接続テスト結果:", testResponse.status, testResponse.ok ? 'OK' : 'エラー');
+          } catch (fetchError) {
+            console.error("接続テスト失敗:", fetchError.name, fetchError.message);
+            if (fetchError.name === 'AbortError') {
+              console.error("→ 接続テストもタイムアウトしました。ネットワークまたはSupabaseへの接続に問題があります。");
+            }
+          }
+        }
+        
+        // タイムアウトを設定（15秒に延長）
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('セッション確認がタイムアウトしました。Supabaseへの接続を確認してください。'));
+          }, 15000);
+        });
+
+        // セッション取得を実行
+        console.log("getSession()を実行...");
+        
+        // まずlocalStorageから直接セッション情報を確認（タイムアウトを避けるため）
+        let sessionFromStorage = null;
+        try {
+          const storageKey = 'sb-sqdfjudhaffivdaxulsn-auth-token';
+          const stored = localStorage.getItem(storageKey);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (parsed && parsed.access_token && parsed.expires_at) {
+                const expiresAt = parsed.expires_at * 1000; // expires_atは秒単位
+                if (Date.now() < expiresAt) {
+                  console.log("localStorageから有効なセッションを発見");
+                  sessionFromStorage = parsed;
+                } else {
+                  console.log("localStorageのセッションは期限切れ");
+                }
+              }
+            } catch (e) {
+              console.log("localStorageのセッション情報のパースに失敗:", e);
+            }
+          }
+        } catch (e) {
+          console.log("localStorageへのアクセスエラー:", e);
+        }
+
+        // Supabaseクライアントでセッションを取得（タイムアウト付き）
+        let result;
+        try {
+          const sessionPromise = supabase.auth.getSession();
+          result = await Promise.race([
+            sessionPromise.then(r => {
+              clearTimeout(timeoutId);
+              return r;
+            }),
+            timeoutPromise
+          ]);
+        } catch (raceError) {
+          clearTimeout(timeoutId);
+          console.error("Promise.raceエラー:", raceError);
+          // タイムアウトした場合でも、localStorageにセッションがあればそれを使う
+          if (raceError.message && raceError.message.includes('タイムアウト')) {
+            console.error("タイムアウトが発生しました。localStorageのセッションを使用します。");
+            if (sessionFromStorage) {
+              result = { 
+                data: { session: { 
+                  access_token: sessionFromStorage.access_token,
+                  refresh_token: sessionFromStorage.refresh_token,
+                  expires_at: sessionFromStorage.expires_at,
+                  expires_in: sessionFromStorage.expires_in,
+                  token_type: sessionFromStorage.token_type,
+                  user: sessionFromStorage.user
+                }}, 
+                error: null 
+              };
+            } else {
+              result = { data: { session: null }, error: null };
+            }
+          } else {
+            throw raceError;
+          }
+        }
+
+        if (!isMounted) return;
+
+        const { data: { session }, error: sessionError } = result || { data: { session: null }, error: null };
+
         if (sessionError) {
           console.error("セッション取得エラー:", sessionError);
+          console.error("エラー詳細:", {
+            message: sessionError.message,
+            status: sessionError.status,
+            code: sessionError.code,
+          });
           setIsLoading(false);
           return;
         }
@@ -5830,6 +6355,7 @@ export default function App() {
           console.log("セッションが見つかりました。ユーザープロフィールを取得中...");
           try {
             const userProfile = await getCurrentUser();
+            if (!isMounted) return;
             if (userProfile) {
               setCurrentUser({ ...userProfile, id: session.user.id });
               console.log("ユーザープロフィールを設定しました");
@@ -5843,11 +6369,29 @@ export default function App() {
           console.log("セッションが見つかりませんでした");
         }
       } catch (err) {
+        clearTimeout(timeoutId);
+        if (!isMounted) return;
         console.error("セッション確認エラー:", err);
-        console.error("エラー詳細:", err.message, err.stack);
+        console.error("エラー詳細:", {
+          message: err.message,
+          name: err.name,
+          stack: err.stack,
+        });
+        
+        // ネットワークエラーの場合の詳細情報
+        if (err.message && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('タイムアウト'))) {
+          console.error("ネットワークエラーの可能性があります。以下を確認してください:");
+          console.error("1. インターネット接続が正常か");
+          console.error("2. Supabaseプロジェクトがアクティブか");
+          console.error("3. ブラウザのコンソールでCORSエラーが出ていないか");
+        }
+        // エラーが発生しても電卓画面を表示し続けるため、エラーを設定しない
+        // setError(err.message); // コメントアウト：エラーを表示しない
       } finally {
-        console.log("セッション確認完了。ローディングを終了します");
-        setIsLoading(false);
+        if (isMounted) {
+          console.log("セッション確認完了。ローディングを終了します");
+          setIsLoading(false);
+        }
       }
     };
 
@@ -5855,29 +6399,44 @@ export default function App() {
 
     // 認証状態の変更を監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
       if (event === 'SIGNED_IN' && session?.user) {
         const userProfile = await getCurrentUser();
-        if (userProfile) {
+        if (userProfile && isMounted) {
           setCurrentUser({ ...userProfile, id: session.user.id });
         }
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' && isMounted) {
         setCurrentUser(null);
       }
     });
 
     return () => {
-      subscription.unsubscribe();
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (subscription) subscription.unsubscribe();
     };
   }, []);
 
   const handleLogin = (user) => {
     try {
+      console.log("handleLogin呼び出し:", user ? "ユーザー情報あり" : "ユーザー情報なし");
       if (!user) {
         console.error("ユーザー情報が正しく渡されていません");
         return;
       }
-      setCurrentUser(user);
+      console.log("setCurrentUserを呼び出します...", user.id);
+      // 状態を確実に更新するため、関数形式で更新
+      setCurrentUser(prev => {
+        console.log("setCurrentUserコールバック実行:", user.id);
+        return user;
+      });
       setError(null);
+      console.log("setCurrentUser呼び出し完了");
+      
+      // 状態更新を確実にするため、少し待ってから確認
+      setTimeout(() => {
+        console.log("handleLogin完了後の確認");
+      }, 100);
     } catch (error) {
       console.error("ログイン処理でエラーが発生しました:", error);
       setError("ログイン処理中にエラーが発生しました");
@@ -5893,44 +6452,44 @@ export default function App() {
     }
   };
 
-  // ローディング中
-  if (isLoading) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <ShieldAlert size={48} className="text-pink-500 mx-auto mb-4 animate-pulse" />
-          <p className="text-sm text-gray-600">読み込み中...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // エラー表示
-  if (error) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-md lg:max-w-lg w-full text-center">
-          <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
-          <p className="text-sm text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => {
-              setError(null);
-              setCurrentUser(null);
-              setIsUnlocked(false);
-            }}
-            className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
-          >
-            リセット
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // デフォルトで電卓画面を表示（セッション確認はバックグラウンドで実行）
+  // ローディング中でも電卓画面を表示（セッション確認が完了するまで）
   try {
+    // ローディング中は電卓画面を表示（セッション確認中でも電卓画面を表示）
     if (!isUnlocked) {
       return <CalculatorMode onUnlock={() => setIsUnlocked(true)} />;
+    }
+
+    // エラー表示（ロック解除後、エラーがある場合のみ）
+    if (error) {
+      return (
+        <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
+          <div className="bg-white p-6 rounded-xl shadow-lg max-w-md lg:max-w-lg w-full text-center">
+            <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
+            <h2 className="text-lg font-bold text-slate-900 mb-2">エラーが発生しました</h2>
+            <p className="text-sm text-gray-600 mb-4">{error}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                setCurrentUser(null);
+                setIsUnlocked(false);
+              }}
+              className="bg-pink-600 text-white font-bold py-2 px-4 rounded shadow-lg hover:bg-pink-700 transition"
+            >
+              リセット
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ローディング中（セッション確認中）でも、ロック解除済みの場合はログイン画面またはメインアプリを表示
+    if (isLoading) {
+      // セッション確認中は、既にログイン済みの場合はメインアプリを表示、未ログインの場合はログイン画面を表示
+      if (currentUser) {
+        return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} />;
+      }
+      return <AuthScreen onLogin={handleLogin} />;
     }
 
     if (!currentUser) {
