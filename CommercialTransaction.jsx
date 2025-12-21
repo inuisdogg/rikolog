@@ -59,28 +59,28 @@ export default function CommercialTransaction() {
             <section>
               <h2 className="text-lg font-bold text-slate-900 mb-3">販売価格</h2>
               <p className="text-sm leading-relaxed mb-2">
-                当サービスは、無料プランとプレミアムプランを提供しています。
+                当サービスは、現在無料プランのみを提供しています。
               </p>
               <ul className="list-disc list-inside text-sm leading-relaxed ml-4 mt-2 space-y-1">
                 <li>無料プラン：無料</li>
-                <li>プレミアムプラン：月額450円（税込）</li>
+                <li>プレミアムプラン：今後リリース予定</li>
               </ul>
               <p className="text-sm leading-relaxed mt-2">
-                価格は、当サービスウェブサイトに表示される価格に基づきます。価格は予告なく変更される場合があります。
+                プレミアムプランの価格や詳細については、リリース時に当サービスウェブサイトにてご案内いたします。
               </p>
             </section>
 
             <section>
               <h2 className="text-lg font-bold text-slate-900 mb-3">支払方法</h2>
               <p className="text-sm leading-relaxed">
-                クレジットカード決済（Visa、Mastercard、American Express、JCB等）
+                プレミアムプランの支払方法については、リリース時にご案内いたします。
               </p>
             </section>
 
             <section>
               <h2 className="text-lg font-bold text-slate-900 mb-3">支払時期</h2>
               <p className="text-sm leading-relaxed">
-                プレミアムプランの利用料金は、ご契約時に初回決済が行われ、以降は毎月自動更新されます。
+                プレミアムプランの支払時期については、リリース時にご案内いたします。
               </p>
             </section>
 
@@ -94,15 +94,8 @@ export default function CommercialTransaction() {
             <section>
               <h2 className="text-lg font-bold text-slate-900 mb-3">キャンセル・返金について</h2>
               <p className="text-sm leading-relaxed mb-2">
-                プレミアムプランのキャンセルは、いつでも可能です。キャンセル後は、現在の支払い期間の終了日までサービスをご利用いただけます。
+                プレミアムプランのキャンセル・返金に関する詳細については、リリース時にご案内いたします。
               </p>
-              <p className="text-sm leading-relaxed">
-                返金については、以下の場合を除き、原則として返金いたしません。
-              </p>
-              <ul className="list-disc list-inside text-sm leading-relaxed ml-4 mt-2 space-y-1">
-                <li>当サービスの不具合により、サービスが提供できない場合</li>
-                <li>当サービスの都合により、サービスを終了する場合</li>
-              </ul>
             </section>
 
             <section>
@@ -136,4 +129,5 @@ export default function CommercialTransaction() {
     </div>
   );
 }
+
 

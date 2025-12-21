@@ -70,3 +70,4 @@ create_logo(text, font_file, color_white, color_pink, "rikolog_logo_icon.png", i
 
 
 
+

@@ -140,3 +140,4 @@ ON CONFLICT (email) DO NOTHING;
 
 もしこのSQLでエラーが出る場合は、RLSポリシーまたはテーブルの設定に問題があります。
 
+

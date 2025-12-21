@@ -13,3 +13,4 @@ console.log('GAS設定:', {
   enabled: USE_GAS
 });
 
+

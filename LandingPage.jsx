@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   ShieldAlert,
   Lock, 
@@ -32,6 +32,7 @@ import {
 import { supabase } from './supabase.config.js';
 
 export default function LandingPage() {
+  const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -105,7 +106,9 @@ export default function LandingPage() {
         setIsSuccess(false);
         setEmail('');
         setPurpose('');
-      }, 3000);
+        // 登録後、サービスページに遷移
+        navigate('/app');
+      }, 2000);
     } catch (err) {
       console.error('メールアドレス保存エラー:', err);
       console.error('エラー詳細:', JSON.stringify(err, null, 2));
@@ -169,12 +172,20 @@ export default function LandingPage() {
           <div className="flex items-center gap-2 font-rikolog text-xl tracking-tighter text-slate-900">
             <ShieldAlert className="text-pink-600" /> リコログ
           </div>
-          <button 
-            onClick={handleStartClick}
-            className="bg-slate-900 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-xl hover:bg-slate-700 transition shadow-lg"
-          >
-            登録する
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => navigate('/app')}
+              className="bg-slate-100 text-slate-700 text-xs md:text-sm font-bold px-4 py-2 rounded-xl hover:bg-slate-200 transition shadow"
+            >
+              サービスを見る
+            </button>
+            <button 
+              onClick={handleStartClick}
+              className="bg-slate-900 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-xl hover:bg-slate-700 transition shadow-lg"
+            >
+              登録する
+            </button>
+          </div>
         </div>
       </header>
 
@@ -289,7 +300,7 @@ export default function LandingPage() {
                 <Camera size={12} /> 写真3枚まで無料
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="text-xs">※録音・動画はプレミアムプランで利用可能</span>
+                <span className="text-xs">※録音・動画は今後リリース予定のプレミアムプランで利用可能になります</span>
               </div>
             </div>
 
@@ -391,7 +402,7 @@ export default function LandingPage() {
                 <li className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> 電卓アイコン（無料）</li>
                 <li className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> 緊急ロックボタン搭載（無料）</li>
                 <li className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> 実際に計算もできる（無料）</li>
-                <li className="flex items-center gap-2"><Crown size={16} className="text-yellow-500" /> 天気・カレンダーなど35種類（プレミアム）</li>
+                <li className="flex items-center gap-2"><Crown size={16} className="text-yellow-500" /> 天気・カレンダーなど35種類（今後リリース予定）</li>
               </ul>
             </div>
           </div>
@@ -442,13 +453,13 @@ export default function LandingPage() {
                 <div className="flex-1">
                   <h3 className="font-bold text-lg mb-2 text-slate-900">位置情報を記録</h3>
                   <p className="text-sm text-gray-600 mb-3">
-                    「いつ・どこで」を記録。無料プランでは手動入力、プレミアムプランではGPSで自動取得できます。
+                    「いつ・どこで」を記録。現在は手動入力のみ対応しています。GPSでの自動取得は今後リリース予定です。
                   </p>
                   <div className="flex items-center gap-2 text-xs text-blue-600 font-bold mb-1">
                     <MapPin size={14} /> 手動入力（無料）
                   </div>
                   <div className="flex items-center gap-2 text-xs text-yellow-600 font-bold">
-                    <Crown size={12} /> GPS自動取得（プレミアム）
+                    <Crown size={12} /> GPS自動取得（今後リリース予定）
                   </div>
                 </div>
               </div>
@@ -463,13 +474,13 @@ export default function LandingPage() {
                 <div className="flex-1">
                   <h3 className="font-bold text-lg mb-2 text-slate-900">詳細を記録・証拠を添付</h3>
                   <p className="text-sm text-gray-600 mb-3">
-                    何をされたか、何を言われたかを具体的に記録。無料プランでは写真3枚まで、プレミアムプランでは録音・動画も添付できます。
+                    何をされたか、何を言われたかを具体的に記録。現在は写真3枚まで添付可能です。録音・動画の添付は今後リリース予定です。
                   </p>
                   <div className="flex items-center gap-2 text-xs text-green-600 font-bold mb-1">
                     <Camera size={14} /> 写真（無料・3枚まで）
                   </div>
                   <div className="flex items-center gap-2 text-xs text-yellow-600 font-bold">
-                    <Crown size={12} /> 録音・動画（プレミアム）
+                    <Crown size={12} /> 録音・動画（今後リリース予定）
                   </div>
                 </div>
               </div>
@@ -546,14 +557,15 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12 sm:mb-16">
             <div className="inline-flex items-center gap-2 bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full mb-4">
-              <Crown size={14} /> Premium
+              <Crown size={14} /> Coming Soon
             </div>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 mt-2 px-2">
-              プレミアムプランで<br className="block sm:hidden" />さらに強力に
+              プレミアムプラン<br className="block sm:hidden" />（今後リリース予定）
             </h2>
             <p className="text-gray-600 text-sm sm:text-base mt-4 px-2">
               より多くのカモフラージュアイコンと、<br className="hidden sm:block" />
-              追加機能で証拠収集を完璧に。
+              追加機能で証拠収集を完璧に。<br className="hidden sm:block" />
+              <span className="text-pink-600 font-bold">プレミアムプランは今後リリース予定です。</span>
             </p>
           </div>
 
@@ -565,11 +577,11 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-slate-900">35種類のアイコン</h3>
-                  <p className="text-xs text-gray-500">電卓以外も選択可能</p>
+                  <p className="text-xs text-gray-500">電卓以外も選択可能（予定）</p>
                 </div>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                天気、カレンダー、時計、メモ、写真など、35種類以上のアイコンから選択できます。より自然なカモフラージュが可能です。
+                天気、カレンダー、時計、メモ、写真など、35種類以上のアイコンから選択できるようになる予定です。より自然なカモフラージュが可能になります。
               </p>
               <div className="flex flex-wrap gap-2">
                 <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">天気</span>
@@ -579,7 +591,7 @@ export default function LandingPage() {
                 <span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-700">+30種類</span>
               </div>
               <div className="mt-3 pt-3 border-t border-yellow-200">
-                <p className="text-xs text-gray-500">※無料プランでは電卓アイコンのみ利用可能</p>
+                <p className="text-xs text-gray-500">※現在は電卓アイコンのみ利用可能です</p>
               </div>
             </div>
 
@@ -589,25 +601,25 @@ export default function LandingPage() {
                   <Target className="text-yellow-600" size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-slate-900">プレミアム限定機能</h3>
+                  <h3 className="font-bold text-lg text-slate-900">プレミアム限定機能（予定）</h3>
                   <p className="text-xs text-gray-500">証拠収集を完璧に</p>
                 </div>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                プレミアムプランでは、以下の機能が利用できます。
+                プレミアムプランでは、以下の機能が利用できるようになる予定です。
               </p>
               <ul className="space-y-2 text-sm text-slate-700 mb-4">
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-yellow-600" /> GPS位置情報の自動取得
+                  <CheckCircle size={14} className="text-yellow-600" /> GPS位置情報の自動取得（予定）
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-yellow-600" /> 録音・動画の添付
+                  <CheckCircle size={14} className="text-yellow-600" /> 録音・動画の添付（予定）
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-yellow-600" /> 陳述書PDF出力
+                  <CheckCircle size={14} className="text-yellow-600" /> 陳述書PDF出力（予定）
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-yellow-600" /> 35種類のカモフラージュアイコン
+                  <CheckCircle size={14} className="text-yellow-600" /> 35種類のカモフラージュアイコン（予定）
                 </li>
               </ul>
               <div className="mt-4 pt-4 border-t border-yellow-200">

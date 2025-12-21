@@ -254,3 +254,4 @@ GOOGLE_AI_API_KEY=xxxxxxxxxxxxx
 - [OpenAI API ドキュメント](https://platform.openai.com/docs)
 - [PWA 実装ガイド](https://web.dev/progressive-web-apps/)
 
+

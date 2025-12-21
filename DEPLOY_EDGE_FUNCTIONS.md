@@ -94,3 +94,4 @@ npx supabase functions deploy stripe-webhook --no-verify-jwt
 ### エラー: "CORS error"
 → Edge FunctionのCORS設定を確認してください。コード内でCORSヘッダーが設定されていることを確認してください。
 
+

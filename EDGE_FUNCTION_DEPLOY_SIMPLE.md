@@ -55,3 +55,4 @@ Supabaseの無料プランではEdge Functionsが利用できない場合があ�
 または、別の方法として：
 - フロントエンドから直接Supabase Auth APIを呼び出す方法に変更することも可能です
 
+

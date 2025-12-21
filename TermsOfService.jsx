@@ -63,10 +63,10 @@ export default function TermsOfService() {
             <section>
               <h2 className="text-lg font-bold text-slate-900 mb-3">第4条（利用料金および支払方法）</h2>
               <p className="text-sm leading-relaxed mb-2">
-                当サービスは、無料プランとプレミアムプランを提供しています。
+                当サービスは、現在無料プランのみを提供しています。
               </p>
               <p className="text-sm leading-relaxed">
-                プレミアムプランの利用料金、支払方法、支払時期については、別途当サービスが定め、当サービスウェブサイトに表示するものとします。
+                プレミアムプランは今後リリース予定です。利用料金、支払方法、支払時期については、リリース時に別途当サービスが定め、当サービスウェブサイトに表示するものとします。
               </p>
             </section>
 
@@ -171,4 +171,5 @@ export default function TermsOfService() {
     </div>
   );
 }
+
 

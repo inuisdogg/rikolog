@@ -22,3 +22,4 @@ FROM pg_policies
 WHERE tablename = 'email_leads'
 AND policyname = 'Users can view own email';
 
+

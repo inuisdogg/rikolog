@@ -76,3 +76,4 @@ VITE_STRIPE_PRICE_ID=price_xxxxx
 2. ブラウザのコンソールでエラーメッセージを確認
 3. 必要に応じて、Stripeダッシュボードで価格を作成
 
+

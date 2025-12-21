@@ -55,3 +55,4 @@ CREATE POLICY "Users can view own email"
 -- FROM pg_policies 
 -- WHERE tablename = 'email_leads';
 
+

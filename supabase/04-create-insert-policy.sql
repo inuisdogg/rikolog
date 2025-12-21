@@ -27,3 +27,4 @@ FROM pg_policies
 WHERE tablename = 'email_leads'
 AND policyname = 'Anyone can insert email leads';
 
+

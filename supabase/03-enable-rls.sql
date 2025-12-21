@@ -18,3 +18,4 @@ FROM pg_tables
 WHERE schemaname = 'public' 
 AND tablename = 'email_leads';
 
+

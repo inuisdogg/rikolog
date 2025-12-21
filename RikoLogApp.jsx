@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PDFDownloadLink, BlobProvider } from '@react-pdf/renderer';
 import { StatementDocument } from './StatementPDF.jsx';
 import { buildStatementDataFromLogs } from './statementTransform.js';
@@ -1801,10 +1802,10 @@ const CompensationDiagnosisView = ({ logs, onClose, onShowPremium }) => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-                      <Crown size={16} className="text-yellow-600" /> より詳細な分析をする（プレミアムプラン）
+                      <Crown size={16} className="text-yellow-600" /> より詳細な分析をする（プレミアムプラン・今後リリース予定）
                     </div>
                     <div className="text-xs text-gray-600 leading-relaxed mb-2">
-                      プレミアムプランでは、詳細な分析レポート、証拠評価の内訳、勝率の詳細分析、証拠収集のアドバイスなど、より充実した診断結果をご利用いただけます。
+                      プレミアムプランでは、詳細な分析レポート、証拠評価の内訳、勝率の詳細分析、証拠収集のアドバイスなど、より充実した診断結果をご利用いただけるようになる予定です。
                     </div>
                     <div className="text-xs text-yellow-600 font-bold flex items-center gap-1">
                       詳細を見る <ExternalLink size={12} />
@@ -1871,10 +1872,10 @@ const CompensationDiagnosisView = ({ logs, onClose, onShowPremium }) => {
                       className="w-full p-4 rounded-xl bg-yellow-50 border border-yellow-200 hover:shadow-md transition text-left"
                     >
                       <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-                        <Crown size={16} className="text-yellow-600" /> プレミアムプランで詳細分析（月額450円）
+                        <Crown size={16} className="text-yellow-600" /> プレミアムプランで詳細分析（今後リリース予定）
                       </div>
                       <div className="text-xs text-gray-600">
-                        詳細な分析レポート、証拠評価の内訳、勝率の詳細分析など
+                        詳細な分析レポート、証拠評価の内訳、勝率の詳細分析などは、プレミアムプランリリース時に利用可能になります
                       </div>
                     </button>
                   )}
@@ -2264,7 +2265,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
     
     // デフォルトの電卓アイコン以外はプレミアム会員のみ
     if (preset.id !== 'calculator' && !isPremium) {
-      alert('電卓以外のアイコン変更はプレミアムプランの特典です。プレミアムプランに登録してください。');
+      alert('電卓以外のアイコン変更は今後リリース予定のプレミアムプランの特典です。');
       setIsDisguiseModalOpen(false);
       onShowPremium();
       return;
@@ -2391,7 +2392,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
             {!isPremium && readSavedDisguise().id !== 'calculator' && (
               <div className="text-[10px] text-yellow-600 mt-1">
                 <Crown size={10} className="inline mr-1" />
-                電卓以外のアイコン変更はプレミアムプランが必要です
+                電卓以外のアイコン変更は今後リリース予定のプレミアムプランで利用可能になります
               </div>
             )}
           </div>
@@ -2441,7 +2442,7 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
                       key={p.id}
                       onClick={() => { 
                         if (requiresPremium) {
-                          setInstallMessage('電卓以外のアイコン変更はプレミアムプランが必要です。');
+                          setInstallMessage('電卓以外のアイコン変更は今後リリース予定のプレミアムプランで利用可能になります。');
                           return;
                         }
                         setSelectedDisguiseId(p.id); 
@@ -3497,10 +3498,10 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-              <Crown size={16} className="text-yellow-600" /> プレミアムプラン
+              <Crown size={16} className="text-yellow-600" /> プレミアムプラン（今後リリース予定）
         </div>
             <div className="text-xs text-gray-600 leading-relaxed mb-2">
-              月額450円で容量無制限・広告非表示・カモフラージュアイコン変更が可能です。
+              プレミアムプランは今後リリース予定です。容量無制限・広告非表示・カモフラージュアイコン変更などの機能を予定しています。
       </div>
             <div className="text-xs text-yellow-600 font-bold flex items-center gap-1">
               詳細を見る <ExternalLink size={12} />
@@ -3561,7 +3562,7 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
         {isFreePlan && (
           <>
             <br />
-            <span className="text-yellow-700">※無料プランでは、プレビュー（サンプル）のみご覧いただけます。PDF出力はプレミアムプラン限定です。</span>
+            <span className="text-yellow-700">※現在は、プレビュー（サンプル）のみご覧いただけます。PDF出力は今後リリース予定のプレミアムプランで利用可能になります。</span>
           </>
         )}
       </p>
@@ -3627,18 +3628,18 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
           <>
             <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
               <Crown size={24} className="mx-auto mb-2 text-yellow-600" />
-              <p className="text-sm font-bold text-gray-700 mb-2">PDF出力はプレミアムプラン限定です</p>
+              <p className="text-sm font-bold text-gray-700 mb-2">PDF出力は今後リリース予定のプレミアムプランで利用可能になります</p>
               <p className="text-xs text-gray-600 mb-4">
-                無料プランでは、プレビュー（サンプル）のみご覧いただけます。
+                現在は、プレビュー（サンプル）のみご覧いただけます。
                 <br />
-                PDF出力機能をご利用いただくには、プレミアムプランへのアップグレードが必要です。
+                PDF出力機能は、プレミアムプランリリース時にご利用いただけるようになります。
               </p>
               {onShowPremium && (
                 <button
                   onClick={onShowPremium}
                   className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg text-sm flex items-center justify-center gap-2 shadow-lg hover:from-yellow-600 hover:to-orange-600 transition-colors"
                 >
-                  <Crown size={16} /> プレミアムプランでPDF出力を利用する
+                  <Crown size={16} /> プレミアムプランについて（今後リリース予定）
                 </button>
               )}
             </div>
@@ -4095,20 +4096,20 @@ const LogDetailView = ({ log, onClose, onUpdate }) => {
     // 無料プラン：写真のみ許可
     if (userPlan === PLAN_TYPES.FREE) {
       if (type !== 'image') {
-        alert('無料プランでは写真のみ添付できます。録音・動画はプレミアムプランでご利用いただけます。');
+        alert('現在は写真のみ添付できます。録音・動画は今後リリース予定のプレミアムプランでご利用いただけるようになります。');
         e.target.value = '';
         return;
       }
       
       if (editedAttachments.length >= FREE_PLAN_LIMITS.MAX_ATTACHMENTS) {
-        alert(`無料版では最大${FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで添付できます。プレミアムプランで無制限になります。`);
+        alert(`現在は最大${FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで添付できます。今後リリース予定のプレミアムプランで無制限になります。`);
         e.target.value = '';
         return;
       }
       
       const fileSizeMB = file.size / (1024 * 1024);
       if (fileSizeMB > FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB) {
-        alert(`無料版では1ファイルあたり最大${FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまでです。プレミアムプランで無制限になります。`);
+        alert(`現在は1ファイルあたり最大${FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまでです。今後リリース予定のプレミアムプランで無制限になります。`);
         e.target.value = '';
         return;
       }
@@ -4366,7 +4367,7 @@ const LogDetailView = ({ log, onClose, onUpdate }) => {
 
                 {!isPremium && (
                   <p className="text-[9px] text-gray-500 mt-2">
-                    無料プラン: 写真のみ添付可能（最大{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個、1ファイルあたり{FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまで）。録音・動画はプレミアムプランでご利用いただけます。
+                    現在: 写真のみ添付可能（最大{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個、1ファイルあたり{FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまで）。録音・動画は今後リリース予定のプレミアムプランでご利用いただけるようになります。
                   </p>
                 )}
               </div>
@@ -4943,7 +4944,7 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
                 {isFreePlan && (
                   <>
                     <br />
-                    <span className="text-yellow-700">※無料プランでは、プレビュー（サンプル）のみご覧いただけます。PDF出力はプレミアムプラン限定です。</span>
+                    <span className="text-yellow-700">※現在は、プレビュー（サンプル）のみご覧いただけます。PDF出力は今後リリース予定のプレミアムプランで利用可能になります。</span>
                   </>
                 )}
               </p>
@@ -5127,12 +5128,12 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
     // プレミアムプラン限定機能
     if (!isPremium) {
       if (onShowPremium) {
-        const confirmed = confirm('GPS位置情報の自動取得はプレミアムプラン限定機能です。\n\nプレミアムプランにアップグレードしますか？');
+        const confirmed = confirm('GPS位置情報の自動取得は今後リリース予定のプレミアムプランで利用可能になります。\n\n詳細を確認しますか？');
         if (confirmed) {
           onShowPremium();
         }
       } else {
-        alert('GPS位置情報の自動取得はプレミアムプラン限定機能です。\n\nプレミアムプランにアップグレードすると利用できます。');
+        alert('GPS位置情報の自動取得は今後リリース予定のプレミアムプランで利用可能になります。\n\n現在は手動入力でご利用いただけます。');
       }
       return;
     }
@@ -5267,20 +5268,20 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
     // 無料プラン：写真のみ許可
     if (userPlan === PLAN_TYPES.FREE) {
       if (type !== 'image') {
-        alert('無料プランでは写真のみ添付できます。録音・動画はプレミアムプランでご利用いただけます。');
+        alert('現在は写真のみ添付できます。録音・動画は今後リリース予定のプレミアムプランでご利用いただけるようになります。');
         e.target.value = ''; // ファイル選択をリセット
         return;
       }
       
       if (attachments.length >= FREE_PLAN_LIMITS.MAX_ATTACHMENTS) {
-        alert(`無料版では最大${FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで添付できます。プレミアムプランで無制限になります。`);
+        alert(`現在は最大${FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで添付できます。今後リリース予定のプレミアムプランで無制限になります。`);
         e.target.value = '';
         return;
       }
       
       const fileSizeMB = file.size / (1024 * 1024);
       if (fileSizeMB > FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB) {
-        alert(`無料版では1ファイルあたり最大${FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまでです。プレミアムプランで無制限になります。`);
+        alert(`現在は1ファイルあたり最大${FREE_PLAN_LIMITS.MAX_FILE_SIZE_MB}MBまでです。今後リリース予定のプレミアムプランで無制限になります。`);
         e.target.value = '';
         return;
       }
@@ -5367,7 +5368,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                               ? 'bg-gray-50 border-yellow-300 text-gray-400 cursor-pointer hover:bg-yellow-50'
                               : 'bg-gray-200 text-gray-600 hover:bg-gray-300 border-gray-200'
                           }`}
-                          title={isGettingLocation ? '位置情報取得中...' : !isPremium ? 'GPS位置情報はプレミアムプラン限定です' : 'GPSで位置情報を自動取得'}
+                          title={isGettingLocation ? '位置情報取得中...' : !isPremium ? 'GPS位置情報は今後リリース予定のプレミアムプランで利用可能になります' : 'GPSで位置情報を自動取得'}
                         >
                           {isGettingLocation ? (
                             <span className="animate-spin">⏳</span>
@@ -5383,7 +5384,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                     </div>
                     {!isPremium && (
                       <p className="text-[10px] text-gray-500 mt-1">
-                        💡 GPS位置情報の自動取得はプレミアムプラン限定です。手動入力も可能です。
+                        💡 GPS位置情報の自動取得は今後リリース予定のプレミアムプランで利用可能になります。現在は手動入力でご利用いただけます。
                       </p>
                     )}
                             </div>
@@ -5529,7 +5530,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                         if (onShowPremium) {
                           onShowPremium();
                         } else {
-                          alert('録音機能はプレミアムプランでご利用いただけます。');
+                          alert('録音機能は今後リリース予定のプレミアムプランでご利用いただけるようになります。');
                         }
                       } : undefined}
                     >
@@ -5551,7 +5552,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                         if (onShowPremium) {
                           onShowPremium();
                         } else {
-                          alert('動画機能はプレミアムプランでご利用いただけます。');
+                          alert('動画機能は今後リリース予定のプレミアムプランでご利用いただけるようになります。');
                         }
                       } : undefined}
                     >
@@ -5575,7 +5576,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
                 {!isPremium && attachments.length > 0 && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-[10px] text-yellow-800">
                     <Crown size={10} className="inline mr-1" />
-                    無料版: {attachments.length}/{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで。プレミアムプランで無制限になります。
+                    現在: {attachments.length}/{FREE_PLAN_LIMITS.MAX_ATTACHMENTS}個まで。今後リリース予定のプレミアムプランで無制限になります。
                   </div>
                 )}
                 {attachments.length > 0 && (
@@ -6105,7 +6106,7 @@ const PremiumPlanView = ({ user, onClose }) => {
       ) : (
         <div className="space-y-4">
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <div className="text-sm font-bold text-slate-900 mb-2">プレミアムプランの特典</div>
+            <div className="text-sm font-bold text-slate-900 mb-2">プレミアムプランの特典（今後リリース予定）</div>
             <div className="space-y-2 text-xs text-gray-600 mb-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-green-500" />
@@ -6135,31 +6136,19 @@ const PremiumPlanView = ({ user, onClose }) => {
             <div className="space-y-1.5 text-[10px] text-gray-700">
               <div>• データはクラウド（Supabase）に保存されます</div>
               <div>• 容量上限は50MBです。超過すると古いデータから自動削除されます</div>
-              <div>• 動画・音声はプレミアムプランでないとアップロードできません（テキストと写真はOK）</div>
+              <div>• 動画・音声は今後リリース予定のプレミアムプランでアップロード可能になります（現在はテキストと写真のみ）</div>
               <div className="mt-2 pt-2 border-t border-blue-200 text-blue-800">
-                💡 データを確実に保管したい場合は、プレミアムプランへのアップグレードをおすすめします
+                💡 プレミアムプランは今後リリース予定です。リリース時にご案内いたします
               </div>
             </div>
           </div>
 
-          <button
-            onClick={() => handleSubscribe(450)}
-            disabled={isLoading}
-            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 rounded-xl shadow-md hover:shadow-lg transition border-2 border-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <div className="text-sm">処理中...</div>
-            ) : (
-              <>
-            <div className="text-2xl font-bold mb-1">¥450</div>
-            <div className="text-sm text-yellow-50/90">月額</div>
-              </>
-            )}
-          </button>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
-            <div className="text-[10px] text-yellow-800 leading-relaxed">
-              <strong>ご注意:</strong> これはデモです。実際の決済処理は実装が必要です。
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+            <div className="text-lg font-bold text-yellow-900 mb-2">プレミアムプランは今後リリース予定です</div>
+            <div className="text-sm text-yellow-800 leading-relaxed">
+              プレミアムプランの詳細や料金については、リリース時にご案内いたします。
+              <br />
+              現在は無料プランでご利用いただけます。
             </div>
           </div>
         </div>
@@ -6388,10 +6377,19 @@ const MainApp = ({ onLock, user, onLogout }) => {
     return (
       <div className="w-full bg-slate-50 font-sans text-slate-900 lg:max-w-6xl lg:mx-auto lg:shadow-xl lg:px-4" style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
       <header className="fixed top-0 left-0 right-0 bg-slate-900 text-white px-3 py-2.5 flex justify-between items-center shadow-md z-50" style={{ paddingTop: 'calc(0.625rem + env(safe-area-inset-top))', paddingBottom: '0.625rem', paddingLeft: 'max(0.75rem, env(safe-area-inset-left))', paddingRight: 'max(0.75rem, env(safe-area-inset-right))' }}>
-        <button onClick={() => setView('dashboard')} className="font-rikolog text-base sm:text-lg flex items-center gap-1.5 hover:opacity-80 transition-opacity">
-          <ShieldAlert size={18} className="text-pink-500 sm:w-5 sm:h-5" />
-          <span>リコログ</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setView('dashboard')} className="font-rikolog text-base sm:text-lg flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+            <ShieldAlert size={18} className="text-pink-500 sm:w-5 sm:h-5" />
+            <span>リコログ</span>
+          </button>
+          <button 
+            onClick={() => navigate('/')} 
+            className="text-xs text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition"
+            title="ランディングページに戻る"
+          >
+            LP
+          </button>
+        </div>
         <div className="flex items-center gap-2 relative">
           {/* メニューボタン */}
           <div className="relative">
@@ -6410,6 +6408,16 @@ const MainApp = ({ onLock, user, onLogout }) => {
                   onClick={() => setIsMenuOpen(false)}
                 />
                 <div className="absolute right-0 top-full mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 min-w-[160px] z-50 overflow-hidden">
+                  <button
+                    onClick={() => {
+                      navigate('/');
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left hover:bg-slate-700 transition-colors flex items-center gap-2 text-slate-300 text-sm"
+                  >
+                    <Home size={16} />
+                    <span>LPに戻る</span>
+                  </button>
                   <button
                     onClick={() => {
                       setView('safety');
@@ -6483,6 +6491,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
 
 // --- App Root ---
 export default function RikoLogApp() {
+  const navigate = useNavigate();
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState(null);

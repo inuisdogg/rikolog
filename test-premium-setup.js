@@ -96,3 +96,4 @@ console.log(`
 // 現在の状態を確認
 checkPremiumStatus();
 
+

@@ -104,3 +104,4 @@ npx supabase functions deploy stripe-webhook --no-verify-jwt
 
 デプロイが完了したら、アプリでプレミアムプランのボタンを押して、Stripe Checkoutページにリダイレクトされるか確認してください。
 
+

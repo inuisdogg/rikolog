@@ -164,3 +164,4 @@ WHERE tablename = 'email_leads';
 
 これで、テーブルとポリシーが正しく作成されているか確認できます。
 
+
