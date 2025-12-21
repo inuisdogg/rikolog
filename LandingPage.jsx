@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { 
-  ShieldAlert, 
-  ShieldCheck,
-  Download, 
+  ShieldAlert,
   Lock, 
   Coins, 
   HeartCrack, 
@@ -34,12 +32,23 @@ import {
 import { supabase } from './supabase.config.js';
 
 export default function LandingPage() {
-  const navigate = useNavigate();
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
+  const [purpose, setPurpose] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  // 利用目的の選択肢
+  const purposeOptions = [
+    { value: 'moral_harassment', label: 'モラハラの記録' },
+    { value: 'dv', label: 'DVの記録' },
+    { value: 'infidelity', label: '不貞の証拠収集' },
+    { value: 'divorce_preparation', label: '離婚準備の証拠収集' },
+    { value: 'alimony', label: '生活費未払いの記録' },
+    { value: 'child_custody', label: '親権・養育費の記録' },
+    { value: 'other', label: 'その他' }
+  ];
 
   const handleStartClick = () => {
     setShowEmailModal(true);
@@ -59,35 +68,84 @@ export default function LandingPage() {
     }
 
     try {
-      // Supabase Edge Functionを呼び出してメール送信
-      const { data, error: functionError } = await supabase.functions.invoke('send-welcome-email', {
+      // Edge Functionでユーザーを作成し、招待メールを送信
+      const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
         body: { 
-          email,
+          email: email,
+          purpose: purpose || null,
           appUrl: window.location.origin + '/app'
         }
       });
 
       if (functionError) {
-        // Edge Functionが利用できない場合は、ローカルでメール送信を試行（開発環境用）
-        console.warn('Edge Function error:', functionError);
-        // 開発環境ではメール送信をスキップして成功として扱う
-        if (import.meta.env.DEV) {
-          console.log('開発環境のため、メール送信をスキップします');
-        } else {
-          throw functionError;
+        console.error('ユーザー作成エラー:', functionError);
+        
+        // エラーメッセージを詳細に表示
+        let errorMessage = '登録に失敗しました。';
+        
+        if (functionError.message) {
+          errorMessage += ` (${functionError.message})`;
         }
+        
+        // 既存ユーザーの場合
+        if (functionError.message?.includes('already registered') || 
+            functionError.message?.includes('already exists')) {
+          errorMessage = 'このメールアドレスは既に登録されています。メールボックスをご確認ください。';
+        }
+        
+        setError(errorMessage);
+        setIsLoading(false);
+        return;
       }
 
+      // 成功
       setIsSuccess(true);
       setTimeout(() => {
         setShowEmailModal(false);
         setIsSuccess(false);
         setEmail('');
-        navigate('/app');
-      }, 2000);
+        setPurpose('');
+      }, 3000);
     } catch (err) {
-      console.error('メール送信エラー:', err);
-      setError('メール送信に失敗しました。しばらくしてから再度お試しください。');
+      console.error('メールアドレス保存エラー:', err);
+      console.error('エラー詳細:', JSON.stringify(err, null, 2));
+      
+      // エラーメッセージを詳細に表示
+      let errorMessage = '登録に失敗しました。';
+      
+      // Supabaseエラーの場合
+      if (err.code) {
+        console.error('Supabaseエラーコード:', err.code);
+        if (err.code === '42P01') {
+          errorMessage = 'データベースのテーブルが存在しません。管理者にお問い合わせください。';
+        } else if (err.code === '42501') {
+          errorMessage = 'データベースの権限設定に問題があります。管理者にお問い合わせください。';
+        } else if (err.code === '23505') {
+          errorMessage = 'このメールアドレスは既に登録されています。';
+        } else {
+          errorMessage += ` (エラーコード: ${err.code})`;
+        }
+      } else if (err.message) {
+        errorMessage += ` (${err.message})`;
+      } else if (err.error?.message) {
+        errorMessage += ` (${err.error.message})`;
+      }
+      
+      // 404エラーの場合（テーブルが存在しない）
+      if (err.message?.includes('404') || err.message?.includes('not found') || err.code === '42P01') {
+        errorMessage = 'データベースのテーブルが存在しません。Supabaseでemail_leadsテーブルを作成してください。';
+      }
+      
+      // ネットワークエラーの場合
+      if (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed to fetch')) {
+        errorMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してください。';
+      }
+      
+      if (!errorMessage.includes('エラーコード') && !errorMessage.includes('テーブル') && !errorMessage.includes('権限')) {
+        errorMessage += ' しばらくしてから再度お試しください。';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -97,6 +155,7 @@ export default function LandingPage() {
     if (!isLoading) {
       setShowEmailModal(false);
       setEmail('');
+      setPurpose('');
       setError('');
       setIsSuccess(false);
     }
@@ -114,7 +173,7 @@ export default function LandingPage() {
             onClick={handleStartClick}
             className="bg-slate-900 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-xl hover:bg-slate-700 transition shadow-lg"
           >
-            無料で始める
+            登録する
           </button>
         </div>
       </header>
@@ -123,8 +182,14 @@ export default function LandingPage() {
       <section className="pt-28 pb-16 md:pt-40 md:pb-24 px-4 bg-gradient-to-b from-pink-50 to-white">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12">
           <div className="md:w-1/2 space-y-6 text-center md:text-left">
-            <div className="inline-block bg-pink-100 text-pink-700 text-xs font-bold px-3 py-1 rounded-full mb-2 mx-auto sm:mx-0">
-              バレずに証拠収集・慰謝料診断
+            <div className="flex flex-wrap gap-2 justify-center md:justify-start mb-2">
+              <div className="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">
+                <Database size={12} className="inline mr-1" />
+                法的証拠保管サービス
+              </div>
+              <div className="inline-block bg-pink-100 text-pink-700 text-xs font-bold px-3 py-1 rounded-full">
+                バレずに証拠収集・慰謝料診断
+              </div>
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-6xl font-black leading-tight text-slate-900">
               その「怒り」を、<br className="block sm:hidden" />
@@ -132,8 +197,10 @@ export default function LandingPage() {
             </h1>
             <p className="text-slate-600 text-sm md:text-base leading-relaxed font-medium px-2 sm:px-0">
               夫のモラハラ、浮気、DV...。泣き寝入りしないでください。<br className="hidden sm:block" />
+              離婚を今考えていなくても、<span className="text-pink-600 font-bold">将来の保険として</span>今から記録を始めましょう。<br className="hidden sm:block" />
               裁判で勝つための「法的に有効な記録」を、<br className="hidden sm:block" />
-              誰にもバレずにスマホ一つで。
+              誰にもバレずにスマホ一つで。<br className="hidden sm:block" />
+              <span className="text-pink-600 font-bold">登録後、すぐにご利用いただけます。</span>
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start pt-4">
@@ -141,11 +208,10 @@ export default function LandingPage() {
                 onClick={handleStartClick}
                 className="bg-pink-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:bg-pink-700 transform hover:-translate-y-1 transition flex items-center justify-center gap-2"
               >
-                <Download size={20} /> 今すぐ記録を始める
-                <span className="text-xs font-normal opacity-80">(無料)</span>
+                <Mail size={20} /> 今すぐ登録する
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">※見た目は「電卓」なので絶対にバレません。</p>
+            <p className="text-xs text-gray-500 mt-2">※登録後、すぐにご利用いただけます</p>
           </div>
           
           <div className="md:w-1/2 relative">
@@ -468,9 +534,9 @@ export default function LandingPage() {
               onClick={handleStartClick}
               className="w-full bg-pink-600 text-white font-bold py-3 px-8 rounded-xl hover:bg-pink-700 transition shadow-lg"
             >
-              無料診断を始める
+              今すぐ登録する
             </button>
-            <p className="text-xs text-gray-400 mt-3">※アプリ内で無料で診断できます</p>
+            <p className="text-xs text-gray-400 mt-3">※登録後、すぐにご利用いただけます</p>
           </div>
         </div>
       </section>
@@ -609,19 +675,21 @@ export default function LandingPage() {
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-8 sm:mb-10 px-2">
             リコログは、あなたが不利な条件で離婚しないための「保険」であり「盾」です。<br className="hidden sm:block" />
+            離婚を今考えていなくても、<span className="text-pink-400 font-bold">将来の保険として</span>今から記録を始めましょう。<br className="hidden sm:block" />
             感情的なメールを夫に送る前に、まずはここに書き殴ってください。<br className="hidden sm:block" />
-            その記録が、いざという時にあなたと子供の未来を守ります。
+            その記録が、いざという時にあなたと子供の未来を守ります。<br className="hidden sm:block" />
+            <span className="text-pink-400 font-bold">登録後、すぐにご利用いただけます。</span>
           </p>
           
           <button 
             onClick={handleStartClick}
             className="inline-flex items-center justify-center gap-3 bg-pink-600 text-white font-bold py-4 sm:py-5 px-8 sm:px-10 rounded-xl shadow-2xl hover:bg-pink-700 transform hover:scale-105 transition w-full sm:w-auto"
           >
-            <ShieldCheck size={20} />
-            <span>今すぐ無料で証拠を集める</span>
+            <Mail size={20} />
+            <span>今すぐ登録する</span>
           </button>
           <p className="text-xs text-slate-400 mt-4">
-            ※完全匿名利用可・プライバシー保護・無料で始められます
+            ※登録後、すぐにご利用いただけます
           </p>
         </div>
       </section>
@@ -662,10 +730,10 @@ export default function LandingPage() {
                   <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Mail className="text-pink-600" size={32} />
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-2">サービス利用案内を送信</h2>
+                  <h2 className="text-2xl font-bold text-slate-900 mb-2">今すぐ登録</h2>
                   <p className="text-sm text-gray-600">
-                    メールアドレスを入力してください。<br />
-                    利用方法やログイン情報をお送りします。
+                    メールアドレスを登録してください。<br />
+                    登録後、すぐにご利用いただけます。
                   </p>
                 </div>
 
@@ -686,6 +754,31 @@ export default function LandingPage() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-3">
+                      利用目的 <span className="text-gray-400 font-normal text-xs">(任意)</span>
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {purposeOptions.map((option) => (
+                        <label
+                          key={option.value}
+                          className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 cursor-pointer transition"
+                        >
+                          <input
+                            type="radio"
+                            name="purpose"
+                            value={option.value}
+                            checked={purpose === option.value}
+                            onChange={(e) => setPurpose(e.target.value)}
+                            disabled={isLoading}
+                            className="w-4 h-4 text-pink-600 border-gray-300 focus:ring-pink-500 focus:ring-2 disabled:opacity-50"
+                          />
+                          <span className="text-sm text-slate-700">{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
                   {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
                       {error}
@@ -700,19 +793,19 @@ export default function LandingPage() {
                     {isLoading ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        送信中...
+                        登録中...
                       </>
                     ) : (
                       <>
                         <Send size={18} />
-                        案内メールを送信
+                        登録する
                       </>
                     )}
                   </button>
                 </form>
 
                 <p className="text-xs text-gray-500 mt-4 text-center">
-                  送信後、アプリ画面に移動します
+                  登録後、招待メールをお送りします
                 </p>
               </>
             ) : (
@@ -720,13 +813,18 @@ export default function LandingPage() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <CheckCircle className="text-green-600" size={32} />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">送信完了</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">登録完了</h2>
                 <p className="text-sm text-gray-600 mb-6">
-                  メールを送信しました。<br />
+                  登録が完了しました。<br />
+                  招待メールをお送りしました。<br />
                   メールボックスをご確認ください。
                 </p>
                 <p className="text-xs text-gray-500">
-                  アプリ画面に移動します...
+                  メールに記載されているログイン情報で<br />
+                  すぐにサービスをご利用いただけます。
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  このウィンドウは自動的に閉じます
                 </p>
               </div>
             )}

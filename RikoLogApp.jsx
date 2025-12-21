@@ -386,6 +386,21 @@ const AuthScreen = ({ onLogin }) => {
     situation: ""
   });
 
+  // URLパラメータからメールアドレスを取得して自動入力
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailParam = urlParams.get('email');
+    if (emailParam) {
+      setFormData(prev => ({
+        ...prev,
+        email: emailParam
+      }));
+      // URLパラメータをクリーンアップ（オプション）
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
   // WebAuthn APIが利用可能かチェック
   const isWebAuthnAvailable = () => {
     // 基本的なチェック
