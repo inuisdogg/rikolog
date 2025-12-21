@@ -101,10 +101,16 @@ serve(async (req) => {
     })
 
     if (createError) {
-      // 既存ユーザーの場合、メールアドレスで検索してパスワードをリセット
-      if (createError.message?.includes('already') || createError.message?.includes('exists') || createError.message?.includes('registered')) {
+      // 既存ユーザーの場合
+      const isExistingUser = createError.message?.includes('already') || 
+                             createError.message?.includes('exists') || 
+                             createError.message?.includes('registered') ||
+                             createError.message?.includes('User already registered') ||
+                             createError.message?.toLowerCase().includes('user already')
+      
+      if (isExistingUser) {
         try {
-          // listUsersで既存ユーザーを検索
+          // listUsersで既存ユーザーを検索（getUserByEmailが使えない場合のフォールバック）
           const { data: usersList, error: listError } = await supabaseAdmin.auth.admin.listUsers()
           
           if (listError) {
@@ -112,37 +118,104 @@ serve(async (req) => {
             throw new Error('既存ユーザーの検索に失敗しました')
           }
           
-          const existingUser = usersList?.users?.find((u: any) => u.email === email)
+          const existingUser = usersList?.users?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
           
-          if (existingUser) {
-            userId = existingUser.id
-            // パスワードを更新
-            const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-              userId,
-              { password: password }
+          if (!existingUser) {
+            // 既存ユーザーが見つからない場合、エラーメッセージを返す
+            return new Response(
+              JSON.stringify({ 
+                success: false,
+                error: 'このメールアドレスは既に登録されていますが、ユーザー情報の取得に失敗しました。',
+                message: 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。'
+              }),
+              { 
+                status: 400, 
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+                } 
+              }
             )
-            
-            if (updateError) {
-              console.error('パスワード更新エラー:', updateError)
-              throw new Error('パスワードの更新に失敗しました: ' + updateError.message)
-            }
-          } else {
-            throw new Error('既存ユーザーが見つかりませんでした')
           }
+          
+          userId = existingUser.id
+          
+          // パスワードを更新
+          const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+            userId,
+            { password: password }
+          )
+          
+          if (updateError) {
+            console.error('パスワード更新エラー:', updateError)
+            throw new Error('パスワードの更新に失敗しました: ' + updateError.message)
+          }
+          
+          console.log('既存ユーザーのパスワードをリセットしました')
         } catch (searchError) {
-          console.error('既存ユーザー検索エラー:', searchError)
-          throw new Error('既存ユーザーの処理に失敗しました: ' + (searchError instanceof Error ? searchError.message : String(searchError)))
+          console.error('既存ユーザー処理エラー:', searchError)
+          const errorMsg = searchError instanceof Error ? searchError.message : String(searchError)
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: '既存ユーザーの処理に失敗しました',
+              message: 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。',
+              details: errorMsg
+            }),
+            { 
+              status: 400, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+              } 
+            }
+          )
         }
       } else {
+        // その他のエラー
         console.error('ユーザー作成エラー:', createError)
-        throw new Error(createError.message || 'ユーザーの作成に失敗しました')
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: createError.message || 'ユーザーの作成に失敗しました',
+            message: createError.message || 'ユーザーの作成に失敗しました。もう一度お試しください。'
+          }),
+          { 
+            status: 400, 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+            } 
+          }
+        )
       }
     } else if (newUser?.user) {
       // 新規ユーザーが作成された
       userId = newUser.user.id
       isNewUser = true
     } else {
-      throw new Error('ユーザーの作成に失敗しました')
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'ユーザーの作成に失敗しました',
+          message: 'ユーザーの作成に失敗しました。もう一度お試しください。'
+        }),
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+          } 
+        }
+      )
     }
 
     // 新規ユーザーの場合のみ、usersテーブルとpremium_subscriptionsテーブルに保存
@@ -341,23 +414,71 @@ serve(async (req) => {
           errorMessage = `メール送信に失敗しました: ${errorText.substring(0, 100)}`
         }
         
-        // メール送信エラーでもユーザー作成は成功しているので、警告として記録
         console.warn('メール送信エラー（ユーザーは作成済み）:', errorMessage)
-        // エラーをスローしない（ユーザー作成は成功しているため）
-        // throw new Error(errorMessage)
+        
+        // メール送信失敗時もパスワードを返す（ユーザーがログインできるように）
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'ユーザーは作成されましたが、メール送信に失敗しました。',
+            userId: userId,
+            isNewUser: isNewUser,
+            emailSent: false,
+            emailError: errorMessage,
+            password: password
+          }),
+          { 
+            status: 200, 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+            } 
+          }
+        )
       } else {
         const responseData = await resendResponse.json()
         console.log('メール送信成功:', responseData)
       }
     } else {
       console.log('Resend APIキーが設定されていません。メール送信をスキップします。')
+      
+      // Resend APIキーが設定されていない場合もパスワードを返す
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'ユーザーは作成されましたが、メール送信機能が設定されていません。',
+          userId: userId,
+          isNewUser: isNewUser,
+          emailSent: false,
+          emailError: 'Resend APIキーが設定されていません',
+          password: password
+        }),
+        { 
+          status: 200, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+          } 
+        }
+      )
     }
 
+    // 既存ユーザーの場合のメッセージを変更
+    const successMessage = isNewUser 
+      ? 'ユーザーを作成し、招待メールを送信しました'
+      : 'パスワードをリセットし、ログイン情報をメールで送信しました'
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'ユーザーを作成し、招待メールを送信しました',
-        userId: userId
+        message: successMessage,
+        userId: userId,
+        isNewUser: isNewUser,
+        emailSent: true
       }),
       { 
         status: 200, 
@@ -377,9 +498,22 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const errorStack = error instanceof Error ? error.stack : undefined
     
+    // エラーメッセージをより分かりやすく
+    let userFriendlyMessage = 'ユーザー作成に失敗しました。もう一度お試しください。'
+    
+    if (errorMessage.includes('既存ユーザー') || errorMessage.includes('already')) {
+      userFriendlyMessage = 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。'
+    } else if (errorMessage.includes('パスワード')) {
+      userFriendlyMessage = 'パスワードの設定に失敗しました。もう一度お試しください。'
+    } else if (errorMessage.includes('メール')) {
+      userFriendlyMessage = 'メールアドレスの処理に失敗しました。正しいメールアドレスを入力してください。'
+    }
+    
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: errorMessage || 'ユーザー作成に失敗しました',
+        message: userFriendlyMessage,
         details: errorStack ? errorStack.split('\n').slice(0, 3).join('\n') : undefined
       }),
       { 

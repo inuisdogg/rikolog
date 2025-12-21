@@ -39,6 +39,8 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [tempPassword, setTempPassword] = useState('');
 
   // 利用目的の選択肢
   const purposeOptions = [
@@ -84,17 +86,71 @@ export default function LandingPage() {
         // エラーメッセージを詳細に表示
         let errorMessage = '登録に失敗しました。';
         
-        if (functionError.message) {
-          errorMessage += ` (${functionError.message})`;
-        }
+        // functionErrorからメッセージを取得
+        const errorMsg = functionError.message || functionError.error || '';
         
-        // 既存ユーザーの場合
-        if (functionError.message?.includes('already registered') || 
-            functionError.message?.includes('already exists')) {
-          errorMessage = 'このメールアドレスは既に登録されています。メールボックスをご確認ください。';
+        if (errorMsg) {
+          // 既存ユーザーの場合
+          if (errorMsg.includes('already registered') || 
+              errorMsg.includes('already exists') ||
+              errorMsg.includes('既に登録されています') ||
+              errorMsg.includes('既存ユーザー')) {
+            errorMessage = 'このメールアドレスは既に登録されています。\n\nログイン画面から「パスワードを忘れた場合」をクリックしてパスワードをリセットしてください。';
+          } else {
+            errorMessage = errorMsg;
+          }
         }
         
         setError(errorMessage);
+        setIsLoading(false);
+        return;
+      }
+
+      // レスポンスデータがない場合
+      if (!functionData) {
+        setError('サーバーからの応答がありません。もう一度お試しください。');
+        setIsLoading(false);
+        return;
+      }
+
+      // 成功レスポンスの処理
+      if (functionData?.success === true) {
+        // メール送信が失敗した場合
+        if (functionData.emailSent === false) {
+          // パスワードが返されている場合は表示
+          if (functionData.password) {
+            setTempPassword(functionData.password);
+            setShowPassword(true);
+            setError('メール送信に失敗しましたが、ユーザーは作成されました。以下のパスワードでログインしてください。');
+          } else {
+            let errorMessage = 'ユーザーは作成されましたが、メール送信に失敗しました。';
+            if (functionData.emailError) {
+              errorMessage += ` (${functionData.emailError})`;
+            }
+            errorMessage += ' 管理者にお問い合わせください。';
+            setError(errorMessage);
+          }
+          setIsLoading(false);
+          return;
+        }
+        
+        // 既存ユーザーの場合でも成功として扱う
+        if (functionData.isNewUser === false) {
+          setIsSuccess(true);
+          setTimeout(() => {
+            setShowEmailModal(false);
+            setIsSuccess(false);
+            setEmail('');
+            setPurpose('');
+            // 既存ユーザーの場合はログイン画面に遷移
+            navigate('/app');
+          }, 3000);
+          return;
+        }
+      } else {
+        // successがfalseの場合
+        const errorMsg = functionData?.message || functionData?.error || '登録に失敗しました。';
+        setError(errorMsg);
         setIsLoading(false);
         return;
       }
@@ -161,6 +217,8 @@ export default function LandingPage() {
       setPurpose('');
       setError('');
       setIsSuccess(false);
+      setShowPassword(false);
+      setTempPassword('');
     }
   };
 
@@ -794,6 +852,17 @@ export default function LandingPage() {
                   {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
                       {error}
+                      {showPassword && tempPassword && (
+                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-xs font-bold mb-1">ログインパスワード:</p>
+                          <div className="bg-white p-2 rounded border border-yellow-300 font-mono text-sm break-all">
+                            {tempPassword}
+                          </div>
+                          <p className="text-xs text-yellow-700 mt-2">
+                            ⚠️ このパスワードは安全に管理してください。
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -825,10 +894,12 @@ export default function LandingPage() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <CheckCircle className="text-green-600" size={32} />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">登録完了</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">処理完了</h2>
                 <p className="text-sm text-gray-600 mb-6">
-                  登録が完了しました。<br />
-                  招待メールをお送りしました。<br />
+                  {functionData?.isNewUser === false 
+                    ? 'このメールアドレスは既に登録されています。' 
+                    : '登録が完了しました。'}<br />
+                  ログイン情報をメールでお送りしました。<br />
                   メールボックスをご確認ください。
                 </p>
                 <p className="text-xs text-gray-500">

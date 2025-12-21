@@ -545,77 +545,64 @@ const AuthScreen = ({ onLogin }) => {
     setError(null);
 
     try {
-
       if (isRegister) {
-        // 新規登録
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // 新規登録: Edge Functionを使用
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
+          body: { 
+            email: trimmedEmail,
+            purpose: formData.reason || null,
+            appUrl: window.location.origin + '/app'
+          }
+        });
+
+        if (functionError) {
+          console.error('ユーザー作成エラー:', functionError);
+          throw new Error(functionError.message || '登録に失敗しました');
+        }
+
+        if (!functionData?.success) {
+          throw new Error(functionData?.error || '登録に失敗しました');
+        }
+
+        // メール送信が失敗した場合、パスワードを表示
+        if (functionData.emailSent === false && functionData.password) {
+          setError(`メール送信に失敗しましたが、ユーザーは作成されました。\n\nパスワード: ${functionData.password}\n\nこのパスワードでログインしてください。`);
+          setIsLoading(false);
+          return;
+        }
+
+        // メール送信成功または既存ユーザーの場合
+        // メールに記載されたパスワードでログインを促す
+        setError('登録が完了しました。\n\nメールに記載されたパスワードでログインしてください。');
+        setIsLoading(false);
+        setIsRegister(false); // ログインモードに切り替え
+        return;
+      } else {
+        // ログイン処理: Supabase標準機能を使用
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
           password: trimmedPassword,
         });
 
-        if (authError) throw authError;
-        if (!authData.user) throw new Error("ユーザー作成に失敗しました");
-
-        // セッション確認
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          throw new Error("登録は完了しましたが、ログインにはメール確認が必要です。メールを確認してログインしてください。");
-        }
-
-        // ユーザー情報を作成
-        try {
-          await createUser(authData.user.id, {
-            email: trimmedEmail,
-            reason: formData.reason,
-            targetDate: formData.targetDate || null,
-            situation: formData.situation || "",
-          });
-        } catch (createError) {
-          if (createError.code !== '23505') throw createError; // 重複エラー以外は再スロー
-        }
-
-        // ユーザー情報を取得
-        let userProfile = await getUser(authData.user.id);
-        if (!userProfile) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          userProfile = await getUser(authData.user.id);
-        }
-        
-        if (!userProfile) {
-          throw new Error("ユーザー情報の取得に失敗しました");
-        }
-
-        // WebAuthn登録（バックグラウンド）
-        if (isWebAuthnAvailable()) {
-          const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
-          if (!existingCredential) {
-            registerWebAuthn(authData.user.id, trimmedEmail).catch(() => {});
+        if (authError) {
+          console.error('ログインエラー:', authError);
+          
+          // エラーメッセージを日本語に変換
+          const errorMsg = authError.message || '';
+          const errorCode = authError.status || '';
+          
+          if (errorCode === 400 || errorMsg.includes('Invalid login credentials') || errorMsg.includes('invalid_credentials')) {
+            throw new Error('メールアドレスまたはパスワードが正しくありません。');
+          } else if (errorMsg.includes('Email not confirmed') || errorMsg.includes('email_not_confirmed')) {
+            throw new Error('メールアドレスの確認が必要です。\n\n登録時に送信されたメールを確認して、メール内のリンクをクリックしてください。');
+          } else {
+            throw new Error(errorMsg || 'ログインに失敗しました。');
           }
         }
 
-        // ログイン成功
-        onLogin({ ...userProfile, id: authData.user.id });
-        return;
-      } else {
-        // ログイン処理（シンプルに）
-        const signInPromise = supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password: trimmedPassword,
-        });
-
-        // タイムアウト処理（10秒）
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('ログイン処理がタイムアウトしました。ネットワーク接続を確認してください。')), 10000);
-        });
-
-        const { data: authData, error: authError } = await Promise.race([
-          signInPromise,
-          timeoutPromise
-        ]);
-
-        if (authError) throw authError;
-        if (!authData?.user) throw new Error("ログインに失敗しました");
+        if (!authData?.user) {
+          throw new Error('ログインに失敗しました。');
+        }
 
         // 30日間保存
         if (rememberMe) {
@@ -626,16 +613,15 @@ const AuthScreen = ({ onLogin }) => {
               expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             }));
           } catch (err) {
-            // 無視
+            console.warn('remember_me保存エラー:', err);
           }
         } else {
           localStorage.removeItem('riko_remember_me');
         }
 
-        // ユーザー情報を取得
+        // ユーザー情報を取得（なければ作成）
         let userProfile = await getUser(authData.user.id);
         
-        // ユーザー情報が見つからない場合、作成
         if (!userProfile) {
           try {
             await createUser(authData.user.id, {
@@ -644,10 +630,12 @@ const AuthScreen = ({ onLogin }) => {
               targetDate: null,
               situation: "",
             });
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // 少し待ってから再取得
+            await new Promise(resolve => setTimeout(resolve, 300));
             userProfile = await getUser(authData.user.id);
           } catch (createError) {
-            // 作成に失敗した場合でも、最小限のユーザー情報で続行
+            console.warn('ユーザー情報作成エラー:', createError);
+            // 最小限のユーザー情報で続行
             userProfile = {
               id: authData.user.id,
               email: trimmedEmail,
@@ -658,15 +646,13 @@ const AuthScreen = ({ onLogin }) => {
           }
         }
 
-        if (!userProfile) {
-          throw new Error("ユーザー情報の取得に失敗しました");
-        }
-
-        // WebAuthn登録（バックグラウンド）
+        // WebAuthn登録（バックグラウンド、エラーは無視）
         if (isWebAuthnAvailable()) {
           const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
           if (!existingCredential) {
-            registerWebAuthn(authData.user.id, trimmedEmail).catch(() => {});
+            registerWebAuthn(authData.user.id, trimmedEmail).catch((err) => {
+              console.warn('WebAuthn登録エラー（無視）:', err);
+            });
           }
         }
 
@@ -675,32 +661,9 @@ const AuthScreen = ({ onLogin }) => {
         return;
       }
     } catch (error) {
-      // エラーメッセージを日本語に変換
-      const errorMsg = error.message || '';
-      const errorCode = error.code || error.status || '';
-      const message = errorMsg.toLowerCase();
-      
-      let errorMessage = "認証処理中にエラーが発生しました。もう一度お試しください。";
-      
-      if (message.includes("email not confirmed") || message.includes("email_not_confirmed") || errorCode === "email_not_confirmed") {
-        errorMessage = "メールアドレスの確認が必要です。\n\n登録時に送信されたメールを確認して、メール内のリンクをクリックしてください。";
-      } else if (message.includes("invalid login credentials") || message.includes("invalid credentials") || errorCode === "invalid_credentials") {
-        errorMessage = "メールアドレスまたはパスワードが正しくありません。";
-      } else if (message.includes("user not found") || message.includes("user_not_found")) {
-        errorMessage = "ユーザーが見つかりません。新規登録を行ってください。";
-      } else if (message.includes("email already registered") || message.includes("user_already_registered")) {
-        errorMessage = "このメールアドレスは既に登録されています。ログインしてください。";
-      } else if (message.includes("タイムアウト") || message.includes("timeout")) {
-        errorMessage = "接続がタイムアウトしました。ネットワーク接続を確認してください。";
-      } else if (message.includes("network") || message.includes("fetch") || message.includes("failed to fetch")) {
-        errorMessage = "ネットワークエラーが発生しました。インターネット接続を確認してください。";
-      } else if (errorMsg) {
-        errorMessage = `認証エラー: ${errorMsg}`;
-      }
-      
-      setError(errorMessage);
+      console.error('認証エラー:', error);
+      setError(error.message || '認証処理中にエラーが発生しました。もう一度お試しください。');
     } finally {
-      // 必ずローディング状態を解除
       setIsLoading(false);
     }
   };
@@ -872,46 +835,35 @@ const AuthScreen = ({ onLogin }) => {
   const handleBiometricLogin = async () => {
     setIsBiometricLoading(true);
     setError(null);
+    
     try {
       // WebAuthn APIが利用可能かチェック
-      const isAvailable = isWebAuthnAvailable();
-      if (!isAvailable) {
-        // より詳細なエラーメッセージを表示
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        const isSecureContext = window.isSecureContext || 
-                               window.location.protocol === 'https:' ||
-                               window.location.hostname === 'localhost' ||
-                               window.location.hostname === '127.0.0.1';
-        
-        if (isIOS && !isSecureContext) {
-          setError("生体認証を使用するには、HTTPS環境でアクセスする必要があります。\n\n本番環境（Vercelなど）では動作します。");
-        } else {
-          setError("このデバイスまたはブラウザは生体認証に対応していません。\n\n対応ブラウザ: Safari 14以降、Chrome、Edge");
-        }
+      if (!isWebAuthnAvailable()) {
+        setError("このデバイスは生体認証に対応していません。\n\nパスワードでログインしてください。");
         return;
       }
 
-      // Supabaseセッションを確認
-      const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession();
+      // セッションを確認（既にログインしている場合）
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (sessionCheckError || !session?.user?.id) {
-        setError("セッションが見つかりません。まずはフォームからログインしてください。");
+      if (!session?.user?.id) {
+        setError("Face IDを使用するには、まず一度パスワードでログインしてください。\n\n次回からFace IDが使用できます。");
         return;
       }
 
       const userId = session.user.id;
 
-      // WebAuthn認証を実行
-      await authenticateWebAuthn(userId);
-
-      // 認証成功後、既に取得したセッションを使用（再取得は不要）
-      // セッションは既に685行目で取得済みなので、そのまま使用
-      if (!session || !session.user) {
-        setError("セッションが無効です。再度ログインしてください。");
+      // WebAuthn認証情報が登録されているか確認
+      const savedCredential = localStorage.getItem(`webauthn_credential_${userId}`);
+      if (!savedCredential) {
+        setError("Face IDが登録されていません。\n\nまず一度パスワードでログインすると、次回からFace IDが使用できます。");
         return;
       }
 
+      // WebAuthn認証を実行
+      await authenticateWebAuthn(userId);
+
+      // 認証成功後、ユーザー情報を取得
       const userProfile = await getCurrentUser();
       if (userProfile) {
         onLogin({ ...userProfile, id: session.user.id });
@@ -923,14 +875,12 @@ const AuthScreen = ({ onLogin }) => {
       
       let errorMessage = "生体認証に失敗しました";
       if (error.message) {
-        if (error.message.includes("キャンセル")) {
-          errorMessage = "認証がキャンセルされました";
-        } else if (error.message.includes("対応していません")) {
-          errorMessage = error.message;
-        } else if (error.message.includes("見つかりません")) {
-          errorMessage = "生体認証が登録されていません。まずはフォームからログインしてください。";
+        if (error.message.includes("キャンセル") || error.message.includes("NotAllowedError")) {
+          errorMessage = "認証がキャンセルされました。";
+        } else if (error.message.includes("見つかりません") || error.message.includes("登録されていません")) {
+          errorMessage = "Face IDが登録されていません。\n\nまず一度パスワードでログインしてください。";
         } else {
-          errorMessage = error.message;
+          errorMessage = `生体認証エラー: ${error.message}`;
         }
       }
       
