@@ -214,7 +214,7 @@ function toSortableDate(log) {
   return new Date(0);
 }
 
-export function buildStatementDataFromLogs({ logs, userProfile }) {
+export function buildStatementDataFromLogs({ logs, userProfile, authorName }) {
   const sorted = [...(logs || [])].sort((a, b) => toSortableDate(a) - toSortableDate(b));
 
   const first = sorted[0];
@@ -224,11 +224,14 @@ export function buildStatementDataFromLogs({ logs, userProfile }) {
       ? `（記録期間: ${safeStr(first?.date)}〜${safeStr(last?.date)} / 全${sorted.length}件）`
       : '';
 
+  // 名前の優先順位: authorName（入力値） > userProfile.name > userProfile.email
+  const author = safeStr(authorName) || safeStr(userProfile?.name) || safeStr(userProfile?.email);
+
   return {
     header: {
       date: new Date().toLocaleDateString('ja-JP'),
       court: '〇〇家庭裁判所 御中',
-      author: safeStr(userProfile?.name || userProfile?.email),
+      author: author,
     },
     introduction:
       `婚姻関係破綻に至る経緯、および相手方の不法行為について、以下の通り日々の記録（アプリ「リコログ」による日時・位置情報等の自動記録を含む）に基づき陳述いたします。${period}`.trim(),

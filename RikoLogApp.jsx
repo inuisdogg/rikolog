@@ -6,6 +6,7 @@ import { supabase } from './supabase.config.js';
 import { getUser, createUser, getCurrentUser } from './db/users.js';
 import { getUserLogs, createLog, updateLog as updateLogInDB } from './db/logs.js';
 import { isPremiumUser, getPremiumSubscription } from './db/premium.js';
+import { stripePromise, PREMIUM_PRICE_ID, SUPABASE_FUNCTIONS_URL } from './stripe.config.js';
 import { 
   ShieldAlert, 
   Plus, 
@@ -5765,10 +5766,68 @@ const PremiumPlanView = ({ user, onClose }) => {
     }
   });
 
-  const handleSubscribe = (planPrice) => {
-    // デモ用：実際の決済処理は実装が必要
+  const [isLoading, setIsLoading] = useState(false);
+
+  // URLパラメータからセッションIDを確認（Stripeリダイレクト後）
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const canceled = urlParams.get('canceled');
+
+    if (sessionId) {
+      // チェックアウト成功 - プレミアムステータスを更新
+      checkSubscriptionStatus();
+      // URLからパラメータを削除
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (canceled) {
+      // チェックアウトキャンセル
+      alert('決済がキャンセルされました。');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const checkSubscriptionStatus = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const subscription = await getPremiumSubscription(user.id);
+      if (subscription && subscription.status === 'active') {
+        const expiresAt = subscription.end_date || null;
+        const newPremiumData = {
+          subscribedAt: subscription.start_date,
+          expiresAt: expiresAt,
+          planPrice: 450,
+          status: 'active'
+        };
+        localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+        setPremiumData(newPremiumData);
+        setIsPremium(true);
+        alert('プレミアムプランへの登録が完了しました！');
+      }
+    } catch (error) {
+      console.error('サブスクリプション確認エラー:', error);
+    }
+  };
+
+  const handleSubscribe = async (planPrice) => {
+    if (!user?.id) {
+      alert('ログインが必要です。');
+      return;
+    }
+
+    // デバッグログ
+    console.log('Stripe設定確認:', {
+      stripePromise: !!stripePromise,
+      PREMIUM_PRICE_ID,
+      SUPABASE_FUNCTIONS_URL,
+      stripePublishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ? '設定済み' : '未設定',
+    });
+
+    // Stripe公開キーが設定されていない場合はデモモード
+    if (!stripePromise) {
+      console.warn('Stripe公開キーが設定されていません。デモモードで動作します。');
     const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 1); // 1ヶ月後
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
     
     const newPremiumData = {
       subscribedAt: new Date().toISOString(),
@@ -5780,7 +5839,174 @@ const PremiumPlanView = ({ user, onClose }) => {
     localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
     setPremiumData(newPremiumData);
     setIsPremium(true);
-    alert(`プレミアムプラン（月額${planPrice}円）に登録しました。\n※これはデモです。実際の決済処理は実装が必要です。`);
+      alert(`プレミアムプラン（月額${planPrice}円）に登録しました。\n\n注意: Stripe公開キーが設定されていないため、デモモードで動作しています。\n実際の決済を行うには、.envファイルにVITE_STRIPE_PUBLISHABLE_KEYを設定してください。`);
+      return;
+    }
+
+    // Edge FunctionのURLが設定されていない場合はデモモード
+    if (!SUPABASE_FUNCTIONS_URL) {
+      console.warn('Supabase Edge FunctionのURLが設定されていません。デモモードで動作します。');
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
+      
+      const newPremiumData = {
+        subscribedAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        planPrice,
+        status: 'active'
+      };
+      
+      localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+      setPremiumData(newPremiumData);
+      setIsPremium(true);
+      alert(`プレミアムプラン（月額${planPrice}円）に登録しました。\n\n注意: Supabase Edge Functionが設定されていないため、デモモードで動作しています。\n実際の決済を行うには、Edge Functionをデプロイしてください。\n詳細は QUICK_FIX_STRIPE.md を参照してください。`);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Supabase Edge Functionを呼び出してチェックアウトセッションを作成
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('認証が必要です。ログインし直してください。');
+      }
+
+      const successUrl = `${window.location.origin}/app?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${window.location.origin}/app?canceled=true`;
+
+      console.log('チェックアウトセッション作成リクエスト:', {
+        url: `${SUPABASE_FUNCTIONS_URL}/create-checkout-session`,
+        userId: user.id,
+        priceId: PREMIUM_PRICE_ID,
+        hasPriceId: !!PREMIUM_PRICE_ID,
+      });
+
+      let response;
+      try {
+        response = await fetch(`${SUPABASE_FUNCTIONS_URL}/create-checkout-session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            priceId: PREMIUM_PRICE_ID || undefined,
+            amount: PREMIUM_PRICE_ID ? undefined : 450, // 価格IDがない場合は金額を送信
+            currency: 'jpy',
+            successUrl,
+            cancelUrl,
+          }),
+        });
+      } catch (fetchError) {
+        console.error('ネットワークエラー:', fetchError);
+        // Edge Functionがデプロイされていない可能性 - デモモードにフォールバック
+        if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
+          console.warn('Edge Functionに接続できません。デモモードで動作します。');
+          const expiresAt = new Date();
+          expiresAt.setMonth(expiresAt.getMonth() + 1);
+          
+          const newPremiumData = {
+            subscribedAt: new Date().toISOString(),
+            expiresAt: expiresAt.toISOString(),
+            planPrice,
+            status: 'active'
+          };
+          
+          localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+          setPremiumData(newPremiumData);
+          setIsPremium(true);
+          setIsLoading(false);
+          alert(
+            `プレミアムプラン（月額${planPrice}円）に登録しました。\n\n` +
+            `注意: Supabase Edge Functionに接続できなかったため、デモモードで動作しています。\n\n` +
+            `実際の決済を行うには、Edge Functionをデプロイしてください：\n` +
+            `1. npm install -g supabase\n` +
+            `2. supabase login\n` +
+            `3. supabase link --project-ref sqdfjudhaffivdaxulsn\n` +
+            `4. supabase functions deploy create-checkout-session\n\n` +
+            `詳細は QUICK_FIX_STRIPE.md を参照してください。`
+          );
+          return;
+        }
+        throw fetchError;
+      }
+
+      console.log('レスポンスステータス:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let error;
+        try {
+          error = JSON.parse(errorText);
+        } catch {
+          error = { error: errorText || 'チェックアウトセッションの作成に失敗しました' };
+        }
+        console.error('エラーレスポンス:', error);
+        
+        // 404エラーの場合、Edge Functionがデプロイされていない可能性 - デモモードにフォールバック
+        if (response.status === 404) {
+          console.warn('Edge Functionが見つかりません。デモモードで動作します。');
+          const expiresAt = new Date();
+          expiresAt.setMonth(expiresAt.getMonth() + 1);
+          
+          const newPremiumData = {
+            subscribedAt: new Date().toISOString(),
+            expiresAt: expiresAt.toISOString(),
+            planPrice,
+            status: 'active'
+          };
+          
+          localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+          setPremiumData(newPremiumData);
+          setIsPremium(true);
+          setIsLoading(false);
+          alert(
+            `プレミアムプラン（月額${planPrice}円）に登録しました。\n\n` +
+            `注意: Supabase Edge Functionが見つからなかったため、デモモードで動作しています。\n\n` +
+            `実際の決済を行うには、Edge Functionをデプロイしてください：\n` +
+            `supabase functions deploy create-checkout-session\n\n` +
+            `詳細は QUICK_FIX_STRIPE.md を参照してください。`
+          );
+          return;
+        }
+        
+        throw new Error(error.error || error.message || 'チェックアウトセッションの作成に失敗しました');
+      }
+
+      const result = await response.json();
+      console.log('チェックアウトセッション作成成功:', result);
+
+      const { sessionId, url } = result;
+
+      if (!sessionId) {
+        throw new Error('セッションIDが取得できませんでした');
+      }
+
+      if (stripePromise) {
+        // Stripe Checkoutにリダイレクト
+        const stripe = await stripePromise;
+        if (!stripe) {
+          throw new Error('Stripeの初期化に失敗しました');
+        }
+        const { error: redirectError } = await stripe.redirectToCheckout({ sessionId });
+        if (redirectError) {
+          throw new Error(redirectError.message || 'Stripe Checkoutへのリダイレクトに失敗しました');
+        }
+      } else if (url) {
+        // URLが直接返された場合はリダイレクト
+        window.location.href = url;
+      } else {
+        throw new Error('チェックアウトURLの取得に失敗しました');
+      }
+    } catch (error) {
+      console.error('決済エラー詳細:', error);
+      const errorMessage = error.message || '決済処理中にエラーが発生しました';
+      alert(`決済処理中にエラーが発生しました:\n\n${errorMessage}\n\n詳細はブラウザのコンソールを確認してください。`);
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -5903,10 +6129,17 @@ const PremiumPlanView = ({ user, onClose }) => {
 
           <button
             onClick={() => handleSubscribe(450)}
-            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 rounded-xl shadow-md hover:shadow-lg transition border-2 border-yellow-400"
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 rounded-xl shadow-md hover:shadow-lg transition border-2 border-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            {isLoading ? (
+              <div className="text-sm">処理中...</div>
+            ) : (
+              <>
             <div className="text-2xl font-bold mb-1">¥450</div>
             <div className="text-sm text-yellow-50/90">月額</div>
+              </>
+            )}
           </button>
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">

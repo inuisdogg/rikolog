@@ -6,8 +6,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    // localhost が ::1（IPv6）に解決される環境で EPERM になるケースがあるため IPv4 に固定
-    host: '127.0.0.1',
+    // スマホからアクセスできるように 0.0.0.0 でリッスン
+    host: '0.0.0.0',
     port: 5173,
     strictPort: false,
     headers: {

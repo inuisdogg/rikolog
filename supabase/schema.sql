@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS premium_subscriptions (
   start_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   end_date TIMESTAMPTZ,
   status TEXT NOT NULL CHECK (status IN ('active', 'cancelled', 'expired')) DEFAULT 'active',
+  stripe_subscription_id TEXT,
+  stripe_customer_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -178,5 +180,27 @@ CREATE POLICY "Users can update own messages"
     auth.uid()::text = user_id OR 
     user_id = '*'
   );
+
+-- 6. stripe_checkout_sessions テーブル（オプション：チェックアウトセッションの追跡用）
+CREATE TABLE IF NOT EXISTS stripe_checkout_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT NOT NULL UNIQUE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'expired')) DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stripe_sessions_user_id ON stripe_checkout_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_sessions_session_id ON stripe_checkout_sessions(session_id);
+
+ALTER TABLE stripe_checkout_sessions ENABLE ROW LEVEL SECURITY;
+
+-- RLS ポリシー
+DROP POLICY IF EXISTS "Users can view own checkout sessions" ON stripe_checkout_sessions;
+CREATE POLICY "Users can view own checkout sessions"
+  ON stripe_checkout_sessions FOR SELECT
+  USING (auth.uid() = user_id);
+
 
 

@@ -69,3 +69,4 @@ create_logo(text, font_file, color_slate, color_transparent, "rikolog_logo_slate
 create_logo(text, font_file, color_white, color_pink, "rikolog_logo_icon.png", is_icon=True)
 
 
+
