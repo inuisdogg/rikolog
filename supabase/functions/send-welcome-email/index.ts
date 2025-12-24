@@ -7,13 +7,52 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 
 serve(async (req) => {
+  // CORS対応: プリフライトリクエスト（OPTIONS）への対応
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
+    })
+  }
+
   try {
-    const { email, appUrl } = await req.json()
+    // リクエストボディをパース
+    let requestData
+    try {
+      requestData = await req.json()
+    } catch (parseError) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON format' }),
+        { 
+          status: 400, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+          } 
+        }
+      )
+    }
+
+    const { email, appUrl } = requestData
 
     if (!email) {
       return new Response(
         JSON.stringify({ error: 'メールアドレスが必要です' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { 
+          status: 400, 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+          } 
+        }
       )
     }
 
@@ -45,21 +84,49 @@ serve(async (req) => {
     </div>
     <div class="content">
       <p>この度は、リコログにご登録いただき、ありがとうございます。</p>
+      <p><strong>ユーザー登録が完了しました。</strong>既にアプリにログイン済みです。すぐにご利用いただけます。</p>
       
-      <h2>📱 ホーム画面に追加する方法</h2>
+      <h2>🔓 電卓パスコード</h2>
+      <p>リコログは「電卓」として偽装されています。以下のパスコードでアプリを解除できます：</p>
+      <div class="code-box" style="text-align: center; font-size: 18px; font-weight: bold;">
+        7777=
+      </div>
+      <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
+        ※「7777」と入力してから「=」ボタンを押してください
+      </p>
+      
+      <h2>📱 使い方ガイド</h2>
       
       <div class="step">
-        <h3>iPhoneの場合：</h3>
+        <h3>1. 電卓からアプリを開く（最初に必ず行ってください）</h3>
+        <ol>
+          <li>電卓画面で「7777」と入力</li>
+          <li>「=」ボタンを押す</li>
+          <li>アプリが解除されます</li>
+        </ol>
+      </div>
+      
+      <div class="step">
+        <h3>2. 記録を追加する</h3>
+        <ol>
+          <li>ホーム画面の「+」ボタンをタップ</li>
+          <li>カテゴリを選択（モラハラ、DV、不貞など）</li>
+          <li>日時・場所・詳細を入力</li>
+          <li>写真を添付（最大3枚まで無料）</li>
+          <li>「保存」をタップ</li>
+        </ol>
+      </div>
+      
+      <div class="step">
+        <h3>3. ホーム画面に追加する（推奨）</h3>
+        <p><strong>iPhoneの場合：</strong></p>
         <ol>
           <li>Safariでリコログを開きます</li>
           <li>画面下部の「共有」ボタン（□↑アイコン）をタップ</li>
           <li>「ホーム画面に追加」を選択</li>
           <li>「追加」をタップ</li>
         </ol>
-      </div>
-      
-      <div class="step">
-        <h3>Androidの場合：</h3>
+        <p style="margin-top: 10px;"><strong>Androidの場合：</strong></p>
         <ol>
           <li>Chromeでリコログを開きます</li>
           <li>メニュー（⋮）をタップ</li>
@@ -68,31 +135,16 @@ serve(async (req) => {
         </ol>
       </div>
       
-      <h2>🔐 ログイン情報</h2>
-      <p>以下のメールアドレスでアプリにアクセスできます：</p>
-      <div class="code-box">
-        <strong>メールアドレス：</strong> ${email}<br>
-        パスワードは、アプリ内で初回ログイン時に設定してください。
-      </div>
-      
-      <h2>🔓 アプリの解除方法</h2>
-      <p>リコログは「電卓」として偽装されています。以下の手順でアプリを解除できます：</p>
-      <div class="code-box">
-        1. 電卓画面で「7777」と入力<br>
-        2. 「=」ボタンを押す<br>
-        3. ログイン画面が表示されます
-      </div>
-      
       <h2>⚠️ 重要な注意事項</h2>
       <ul>
-        <li>パスワードは安全に管理してください</li>
-        <li>電卓のパスコード（7777）は秘密にしてください</li>
+        <li>電卓のパスコード（7777=）は秘密にしてください</li>
         <li>緊急時は「緊急ロック」ボタンで即座に電卓に戻れます</li>
         <li>記録したデータはクラウドに自動保存されます</li>
+        <li>パスワードは安全に管理してください</li>
       </ul>
       
-      <p style="margin-top: 30px;">
-        <a href="${finalAppUrl}" class="button">今すぐ始める</a>
+      <p style="margin-top: 30px; text-align: center;">
+        <a href="${finalAppUrl}" class="button">アプリを開く</a>
       </p>
       
       <p style="margin-top: 30px; font-size: 12px; color: #666;">
@@ -112,9 +164,9 @@ serve(async (req) => {
           'Authorization': `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'リコログ <noreply@rikolog.app>',
+          from: 'リコログ <info@rikolog.net>',
           to: email,
-          subject: '【リコログ】サービス利用案内',
+          subject: '【リコログ】ユーザー登録が完了しました',
           html: emailBody,
         }),
       })
@@ -139,13 +191,29 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, message: 'メールを送信しました' }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 200, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        } 
+      }
     )
   } catch (error) {
     console.error('Error:', error)
     return new Response(
       JSON.stringify({ error: error.message || 'メール送信に失敗しました' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        } 
+      }
     )
   }
 })

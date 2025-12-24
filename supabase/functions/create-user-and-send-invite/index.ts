@@ -49,7 +49,7 @@ serve(async (req) => {
       )
     }
 
-    const { email, purpose, appUrl } = requestData
+    const { email, purpose, appUrl, password: providedPassword } = requestData
 
     if (!email) {
       return new Response(
@@ -89,44 +89,84 @@ serve(async (req) => {
       }
     })
 
-    // 新規ユーザーを作成（既存ユーザーの場合はエラーを処理）
-    const password = generateRandomPassword()
-    let userId: string
+    // パスワードが提供されている場合のみユーザーを作成（ログイン画面からの新規登録）
+    // パスワードが提供されていない場合はメールのみ送信（LPからの登録）
+    const shouldCreateUser = !!providedPassword
+    let userId: string | null = null
     let isNewUser = false
-    
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: email,
-      password: password,
-      email_confirm: true, // メール確認をスキップ（招待メールで確認済みとして扱う）
-    })
+    const password = providedPassword || ''
 
-    if (createError) {
-      // 既存ユーザーの場合
-      const isExistingUser = createError.message?.includes('already') || 
-                             createError.message?.includes('exists') || 
-                             createError.message?.includes('registered') ||
-                             createError.message?.includes('User already registered') ||
-                             createError.message?.toLowerCase().includes('user already')
-      
-      if (isExistingUser) {
-        try {
-          // listUsersで既存ユーザーを検索（getUserByEmailが使えない場合のフォールバック）
-          const { data: usersList, error: listError } = await supabaseAdmin.auth.admin.listUsers()
-          
-          if (listError) {
-            console.error('ユーザーリスト取得エラー:', listError)
-            throw new Error('既存ユーザーの検索に失敗しました')
-          }
-          
-          const existingUser = usersList?.users?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
-          
-          if (!existingUser) {
-            // 既存ユーザーが見つからない場合、エラーメッセージを返す
+    if (shouldCreateUser) {
+      // ログイン画面からの新規登録：ユーザーを作成
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: email,
+        password: password,
+        email_confirm: true, // メール確認をスキップ（招待メールで確認済みとして扱う）
+      })
+
+      if (createError) {
+        // 既存ユーザーの場合
+        const isExistingUser = createError.message?.includes('already') || 
+                               createError.message?.includes('exists') || 
+                               createError.message?.includes('registered') ||
+                               createError.message?.includes('User already registered') ||
+                               createError.message?.toLowerCase().includes('user already')
+        
+        if (isExistingUser) {
+          try {
+            // listUsersで既存ユーザーを検索（getUserByEmailが使えない場合のフォールバック）
+            const { data: usersList, error: listError } = await supabaseAdmin.auth.admin.listUsers()
+            
+            if (listError) {
+              console.error('ユーザーリスト取得エラー:', listError)
+              throw new Error('既存ユーザーの検索に失敗しました')
+            }
+            
+            const existingUser = usersList?.users?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
+            
+            if (!existingUser) {
+              // 既存ユーザーが見つからない場合、エラーメッセージを返す
+              return new Response(
+                JSON.stringify({ 
+                  success: false,
+                  error: 'このメールアドレスは既に登録されていますが、ユーザー情報の取得に失敗しました。',
+                  message: 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。'
+                }),
+                { 
+                  status: 400, 
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+                  } 
+                }
+              )
+            }
+            
+            userId = existingUser.id
+            
+            // パスワードを更新
+            const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+              userId,
+              { password: password }
+            )
+            
+            if (updateError) {
+              console.error('パスワード更新エラー:', updateError)
+              throw new Error('パスワードの更新に失敗しました: ' + updateError.message)
+            }
+            
+            console.log('既存ユーザーのパスワードをリセットしました')
+          } catch (searchError) {
+            console.error('既存ユーザー処理エラー:', searchError)
+            const errorMsg = searchError instanceof Error ? searchError.message : String(searchError)
             return new Response(
               JSON.stringify({ 
                 success: false,
-                error: 'このメールアドレスは既に登録されていますが、ユーザー情報の取得に失敗しました。',
-                message: 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。'
+                error: '既存ユーザーの処理に失敗しました',
+                message: 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。',
+                details: errorMsg
               }),
               { 
                 status: 400, 
@@ -139,30 +179,14 @@ serve(async (req) => {
               }
             )
           }
-          
-          userId = existingUser.id
-          
-          // パスワードを更新
-          const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-            userId,
-            { password: password }
-          )
-          
-          if (updateError) {
-            console.error('パスワード更新エラー:', updateError)
-            throw new Error('パスワードの更新に失敗しました: ' + updateError.message)
-          }
-          
-          console.log('既存ユーザーのパスワードをリセットしました')
-        } catch (searchError) {
-          console.error('既存ユーザー処理エラー:', searchError)
-          const errorMsg = searchError instanceof Error ? searchError.message : String(searchError)
+        } else {
+          // その他のエラー
+          console.error('ユーザー作成エラー:', createError)
           return new Response(
             JSON.stringify({ 
               success: false,
-              error: '既存ユーザーの処理に失敗しました',
-              message: 'このメールアドレスは既に登録されています。ログイン画面からパスワードリセットを行ってください。',
-              details: errorMsg
+              error: createError.message || 'ユーザーの作成に失敗しました',
+              message: createError.message || 'ユーザーの作成に失敗しました。もう一度お試しください。'
             }),
             { 
               status: 400, 
@@ -175,17 +199,19 @@ serve(async (req) => {
             }
           )
         }
+      } else if (newUser?.user) {
+        // 新規ユーザーが作成された
+        userId = newUser.user.id
+        isNewUser = true
       } else {
-        // その他のエラー
-        console.error('ユーザー作成エラー:', createError)
         return new Response(
           JSON.stringify({ 
             success: false,
-            error: createError.message || 'ユーザーの作成に失敗しました',
-            message: createError.message || 'ユーザーの作成に失敗しました。もう一度お試しください。'
+            error: 'ユーザーの作成に失敗しました',
+            message: 'ユーザーの作成に失敗しました。もう一度お試しください。'
           }),
           { 
-            status: 400, 
+            status: 500, 
             headers: { 
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
@@ -195,59 +221,37 @@ serve(async (req) => {
           }
         )
       }
-    } else if (newUser?.user) {
-      // 新規ユーザーが作成された
-      userId = newUser.user.id
-      isNewUser = true
-    } else {
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'ユーザーの作成に失敗しました',
-          message: 'ユーザーの作成に失敗しました。もう一度お試しください。'
-        }),
-        { 
-          status: 500, 
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-          } 
+
+      // 新規ユーザーの場合のみ、usersテーブルとpremium_subscriptionsテーブルに保存
+      if (isNewUser && userId) {
+        // usersテーブルにユーザー情報を保存
+        const { error: userInsertError } = await supabaseAdmin
+          .from('users')
+          .insert({
+            id: userId,
+            email: email,
+            reason: purpose || 'その他',
+            registered_at: new Date().toISOString(),
+          })
+
+        if (userInsertError) {
+          console.error('usersテーブルへの保存エラー:', userInsertError)
+          // エラーをログに記録するが、処理は続行
         }
-      )
-    }
 
-    // 新規ユーザーの場合のみ、usersテーブルとpremium_subscriptionsテーブルに保存
-    if (isNewUser) {
+        // premium_subscriptionsテーブルに無料プランを設定
+        const { error: premiumError } = await supabaseAdmin
+          .from('premium_subscriptions')
+          .insert({
+            user_id: userId,
+            plan_type: 'free',
+            status: 'active',
+          })
 
-      // usersテーブルにユーザー情報を保存
-      const { error: userInsertError } = await supabaseAdmin
-        .from('users')
-        .insert({
-          id: userId,
-          email: email,
-          reason: purpose || 'その他',
-          registered_at: new Date().toISOString(),
-        })
-
-      if (userInsertError) {
-        console.error('usersテーブルへの保存エラー:', userInsertError)
-        // エラーをログに記録するが、処理は続行
-      }
-
-      // premium_subscriptionsテーブルに無料プランを設定
-      const { error: premiumError } = await supabaseAdmin
-        .from('premium_subscriptions')
-        .insert({
-          user_id: userId,
-          plan_type: 'free',
-          status: 'active',
-        })
-
-      if (premiumError) {
-        console.error('premium_subscriptionsテーブルへの保存エラー:', premiumError)
-        // エラーをログに記録するが、処理は続行
+        if (premiumError) {
+          console.error('premium_subscriptionsテーブルへの保存エラー:', premiumError)
+          // エラーをログに記録するが、処理は続行
+        }
       }
     }
 
@@ -268,16 +272,20 @@ serve(async (req) => {
       // エラーをログに記録するが、処理は続行
     }
 
-    // アプリのURLを取得
-    const finalAppUrl = appUrl || (req.headers.get('origin') ? `${req.headers.get('origin')}/app` : '/app')
-    const loginUrl = `${finalAppUrl}?email=${encodeURIComponent(email)}`
+    // アプリのURLを取得（本番環境のURLを使用）
+    const finalAppUrl = appUrl || 'https://rikolog.net/app'
+    // LPからの登録の場合は新規登録画面を表示、ログイン画面からの登録の場合はログイン画面を表示
+    const registerParam = shouldCreateUser ? '' : '&register=true'
+    const loginUrl = `${finalAppUrl}?email=${encodeURIComponent(email)}${registerParam}`
 
     // 電卓パスコード（固定）
     const calculatorPassword = '7777'
 
     // メール送信（Resend APIを使用）
     if (RESEND_API_KEY) {
-      const emailBody = `
+      // LPからの登録とログイン画面からの新規登録でメール内容を分岐
+      const emailBody = shouldCreateUser 
+        ? `
 <!DOCTYPE html>
 <html>
 <head>
@@ -308,18 +316,21 @@ serve(async (req) => {
         <strong>メールアドレス：</strong><br>
         ${email}<br><br>
         <strong>パスワード：</strong><br>
-        ${password}
+        登録時に設定したパスワード
       </div>
       
       <div class="warning">
-        <strong>⚠️ 重要：</strong>このパスワードは安全に管理してください。メールを削除する前に、必ずパスワードを控えておいてください。
+        <strong>⚠️ 重要：</strong>登録時に設定したパスワードでログインしてください。
       </div>
       
-      <h2>🔓 電卓パスコード</h2>
+      <h2>🔓 電卓パスコード（最初に確認してください）</h2>
       <p>リコログは「電卓」として偽装されています。以下のパスコードでアプリを解除できます：</p>
-      <div class="code-box">
-        ${calculatorPassword}
+      <div class="code-box" style="text-align: center; font-size: 18px; font-weight: bold;">
+        ${calculatorPassword}=
       </div>
+      <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
+        ※「${calculatorPassword}」と入力してから「=」ボタンを押してください
+      </p>
       
       <h2>📱 ログイン方法</h2>
       <div class="step">
@@ -339,8 +350,81 @@ serve(async (req) => {
       </div>
       
       <div class="step">
-        <h3>手順3：電卓パスコードを入力</h3>
+        <h3>手順3：電卓パスコードでアプリを開く</h3>
         <ol>
+          <li>ログイン後、電卓画面が表示されます</li>
+          <li>電卓画面で「${calculatorPassword}」と入力</li>
+          <li>「=」ボタンを押す</li>
+          <li>アプリが解除されます</li>
+        </ol>
+      </div>
+`
+        : `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #fdf2f8 0%, #fff1f2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+    .content { background: white; padding: 30px; border-radius: 0 0 10px 10px; }
+    .button { display: inline-block; background: #ec4899; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+    .code-box { background: #f3f4f6; padding: 15px; border-radius: 8px; font-family: monospace; margin: 15px 0; text-align: center; font-size: 18px; font-weight: bold; }
+    .step { margin: 20px 0; padding: 15px; background: #f9fafb; border-left: 4px solid #ec4899; }
+    .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 15px 0; }
+    .info { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 15px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="color: #ec4899; margin: 0;">リコログ</h1>
+      <p style="margin: 10px 0 0 0; color: #666;">サービス利用開始のご案内</p>
+    </div>
+    <div class="content">
+      <p>この度は、リコログにご興味をお持ちいただき、ありがとうございます。</p>
+      <p>サービスをご利用いただくには、まずアカウントを作成していただく必要があります。</p>
+      
+      <div class="info">
+        <strong>📝 次のステップ：</strong><br>
+        以下のリンクからサービスページにアクセスし、新規登録を行ってください。
+      </div>
+      
+      <h2>🔓 電卓パスコード（最初に確認してください）</h2>
+      <p>リコログは「電卓」として偽装されています。以下のパスコードでアプリを解除できます：</p>
+      <div class="code-box" style="text-align: center; font-size: 18px; font-weight: bold;">
+        ${calculatorPassword}=
+      </div>
+      <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
+        ※「${calculatorPassword}」と入力してから「=」ボタンを押してください
+      </p>
+      
+      <h2>📱 登録方法</h2>
+      <div class="step">
+        <h3>手順1：新規登録画面にアクセス</h3>
+        <p>以下のボタンから新規登録画面にアクセスしてください。</p>
+        <p style="text-align: center; margin: 20px 0;">
+          <a href="${loginUrl}" class="button">新規登録を開始する</a>
+        </p>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">
+          ※メールアドレス（${email}）は自動入力されます
+        </p>
+      </div>
+      
+      <div class="step">
+        <h3>手順2：パスワードを設定して登録</h3>
+        <ol>
+          <li>メールアドレス（${email}）が自動入力されていることを確認</li>
+          <li>パスワードを設定（6文字以上）</li>
+          <li>「利用を開始する」ボタンをクリック</li>
+        </ol>
+      </div>
+      
+      <div class="step">
+        <h3>手順3：電卓パスコードでアプリを開く</h3>
+        <ol>
+          <li>ログイン後、電卓画面が表示されます</li>
           <li>電卓画面で「${calculatorPassword}」と入力</li>
           <li>「=」ボタンを押す</li>
           <li>アプリが解除されます</li>
@@ -371,8 +455,8 @@ serve(async (req) => {
       
       <h2>⚠️ 重要な注意事項</h2>
       <ul>
-        <li>パスワードは安全に管理してください</li>
-        <li>電卓のパスコード（${calculatorPassword}）は秘密にしてください</li>
+        <li>${shouldCreateUser ? 'パスワードは安全に管理してください' : 'パスワードは自分で設定できます。安全なパスワードを設定してください'}</li>
+        <li>電卓のパスコード（${calculatorPassword}=）は秘密にしてください</li>
         <li>緊急時は「緊急ロック」ボタンで即座に電卓に戻れます</li>
         <li>記録したデータはクラウドに自動保存されます</li>
       </ul>
@@ -394,7 +478,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: 'リコログ <noreply@rikolog.app>',
+          from: 'リコログ <info@rikolog.net>',
           to: email,
           subject: '【リコログ】サービス利用開始のご案内',
           html: emailBody,
@@ -414,17 +498,68 @@ serve(async (req) => {
           errorMessage = `メール送信に失敗しました: ${errorText.substring(0, 100)}`
         }
         
-        console.warn('メール送信エラー（ユーザーは作成済み）:', errorMessage)
+        console.warn('メール送信エラー:', errorMessage)
         
-        // メール送信失敗時もパスワードを返す（ユーザーがログインできるように）
+        // メール送信失敗時の処理
+        if (shouldCreateUser) {
+          // ログイン画面からの新規登録の場合
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'ユーザーは作成されましたが、メール送信に失敗しました。',
+              userId: userId,
+              isNewUser: isNewUser,
+              emailSent: false,
+              emailError: errorMessage,
+              password: password
+            }),
+            { 
+              status: 200, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+              } 
+            }
+          )
+        } else {
+          // LPからの登録の場合
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              message: 'メール送信に失敗しました。もう一度お試しください。',
+              emailSent: false,
+              emailError: errorMessage
+            }),
+            { 
+              status: 200, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+              } 
+            }
+          )
+        }
+      } else {
+        const responseData = await resendResponse.json()
+        console.log('メール送信成功:', responseData)
+      }
+    } else {
+      console.log('Resend APIキーが設定されていません。メール送信をスキップします。')
+      
+      // Resend APIキーが設定されていない場合
+      if (shouldCreateUser) {
         return new Response(
           JSON.stringify({ 
             success: true, 
-            message: 'ユーザーは作成されましたが、メール送信に失敗しました。',
+            message: 'ユーザーは作成されましたが、メール送信機能が設定されていません。',
             userId: userId,
             isNewUser: isNewUser,
             emailSent: false,
-            emailError: errorMessage,
+            emailError: 'Resend APIキーが設定されていません',
             password: password
           }),
           { 
@@ -438,45 +573,43 @@ serve(async (req) => {
           }
         )
       } else {
-        const responseData = await resendResponse.json()
-        console.log('メール送信成功:', responseData)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'メール送信機能が設定されていません。管理者にお問い合わせください。',
+            emailSent: false,
+            emailError: 'Resend APIキーが設定されていません'
+          }),
+          { 
+            status: 200, 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+            } 
+          }
+        )
       }
-    } else {
-      console.log('Resend APIキーが設定されていません。メール送信をスキップします。')
-      
-      // Resend APIキーが設定されていない場合もパスワードを返す
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'ユーザーは作成されましたが、メール送信機能が設定されていません。',
-          userId: userId,
-          isNewUser: isNewUser,
-          emailSent: false,
-          emailError: 'Resend APIキーが設定されていません',
-          password: password
-        }),
-        { 
-          status: 200, 
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-          } 
-        }
-      )
     }
 
-    // 既存ユーザーの場合のメッセージを変更
-    const successMessage = isNewUser 
-      ? 'ユーザーを作成し、招待メールを送信しました'
-      : 'パスワードをリセットし、ログイン情報をメールで送信しました'
+    // 成功時のメッセージを決定
+    let successMessage: string
+    if (shouldCreateUser) {
+      // ログイン画面からの新規登録
+      successMessage = isNewUser 
+        ? 'ユーザーを作成し、招待メールを送信しました'
+        : 'パスワードをリセットし、ログイン情報をメールで送信しました'
+    } else {
+      // LPからの登録
+      successMessage = 'サービスページへの招待メールを送信しました'
+    }
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: successMessage,
-        userId: userId,
+        userId: userId || null,
         isNewUser: isNewUser,
         emailSent: true
       }),

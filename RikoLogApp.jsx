@@ -391,12 +391,22 @@ const AuthScreen = ({ onLogin }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const emailParam = urlParams.get('email');
+    const registerParam = urlParams.get('register');
+    
     if (emailParam) {
       setFormData(prev => ({
         ...prev,
         email: emailParam
       }));
-      // URLパラメータをクリーンアップ（オプション）
+    }
+    
+    // registerパラメータがある場合は新規登録画面を表示
+    if (registerParam === 'true') {
+      setIsRegister(true);
+    }
+    
+    // URLパラメータをクリーンアップ（emailまたはregisterパラメータがある場合）
+    if (emailParam || registerParam) {
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
@@ -546,36 +556,155 @@ const AuthScreen = ({ onLogin }) => {
 
     try {
       if (isRegister) {
-        // 新規登録: Edge Functionを使用
-        const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
-          body: { 
-            email: trimmedEmail,
-            purpose: formData.reason || null,
-            appUrl: window.location.origin + '/app'
+        // パスワードのバリデーション
+        if (!trimmedPassword || trimmedPassword.length < 6) {
+          throw new Error('パスワードは6文字以上で入力してください。');
+        }
+
+        // 新規登録: Supabase標準機能を使用（自動ログイン）
+        const { data: authData, error: signUpError } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password: trimmedPassword,
+          options: {
+            emailRedirectTo: `${window.location.origin}/app`
           }
         });
 
-        if (functionError) {
-          console.error('ユーザー作成エラー:', functionError);
-          throw new Error(functionError.message || '登録に失敗しました');
+        if (signUpError) {
+          console.error('ユーザー登録エラー:', signUpError);
+          
+          // エラーメッセージを日本語に変換
+          const errorMsg = signUpError.message || '';
+          if (errorMsg.includes('already registered') || errorMsg.includes('already exists') || errorMsg.includes('User already registered')) {
+            throw new Error('このメールアドレスは既に登録されています。ログイン画面からログインしてください。');
+          } else {
+            throw new Error(errorMsg || '登録に失敗しました。もう一度お試しください。');
+          }
         }
 
-        if (!functionData?.success) {
-          throw new Error(functionData?.error || '登録に失敗しました');
+        if (!authData?.user) {
+          throw new Error('ユーザーの登録に失敗しました。もう一度お試しください。');
         }
 
-        // メール送信が失敗した場合、パスワードを表示
-        if (functionData.emailSent === false && functionData.password) {
-          setError(`メール送信に失敗しましたが、ユーザーは作成されました。\n\nパスワード: ${functionData.password}\n\nこのパスワードでログインしてください。`);
-          setIsLoading(false);
-          return;
+        // セッションが取得できているか確認
+        let session = authData.session;
+        
+        // セッションがない場合（メール確認が必要な場合）、ログインを試みる
+        if (!session) {
+          console.log('セッションがないため、ログインを試みます...');
+          const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password: trimmedPassword,
+          });
+          
+          if (loginError) {
+            console.error('自動ログインエラー:', loginError);
+            throw new Error('登録は完了しましたが、ログインに失敗しました。ログイン画面から再度ログインしてください。');
+          }
+          
+          session = loginData?.session;
+          if (!session) {
+            throw new Error('セッションの取得に失敗しました。ログイン画面から再度ログインしてください。');
+          }
         }
 
-        // メール送信成功または既存ユーザーの場合
-        // メールに記載されたパスワードでログインを促す
-        setError('登録が完了しました。\n\nメールに記載されたパスワードでログインしてください。');
-        setIsLoading(false);
-        setIsRegister(false); // ログインモードに切り替え
+        // ユーザー情報をusersテーブルに保存
+        try {
+          await createUser(authData.user.id, {
+            email: trimmedEmail,
+            reason: formData.reason || 'その他',
+            targetDate: formData.targetDate || null,
+            situation: '',
+          });
+        } catch (createError) {
+          console.warn('usersテーブルへの保存エラー:', createError);
+          // エラーでも続行
+        }
+
+        // premium_subscriptionsテーブルに無料プランを設定
+        try {
+          const { error: premiumError } = await supabase
+            .from('premium_subscriptions')
+            .insert({
+              user_id: authData.user.id,
+              plan_type: 'free',
+              status: 'active',
+            });
+
+          if (premiumError) {
+            console.warn('premium_subscriptionsテーブルへの保存エラー:', premiumError);
+            // エラーでも続行
+          }
+        } catch (premiumError) {
+          console.warn('premium_subscriptionsテーブルへの保存エラー:', premiumError);
+          // エラーでも続行
+        }
+
+        // 登録完了メールを送信（非同期、エラーでも続行）
+        supabase.functions.invoke('send-welcome-email', {
+          body: { 
+            email: trimmedEmail,
+            appUrl: window.location.origin + '/app'
+          }
+        }).catch((emailError) => {
+          console.warn('登録完了メール送信エラー:', emailError);
+          // メール送信エラーは無視して続行
+        });
+
+        // 30日間保存
+        if (rememberMe) {
+          try {
+            localStorage.setItem('riko_remember_me', JSON.stringify({
+              userId: authData.user.id,
+              email: trimmedEmail,
+              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            }));
+          } catch (err) {
+            console.warn('remember_me保存エラー:', err);
+          }
+        } else {
+          localStorage.removeItem('riko_remember_me');
+        }
+
+        // ユーザー情報を取得（なければ作成）
+        let userProfile = await getUser(authData.user.id);
+        
+        if (!userProfile) {
+          try {
+            await createUser(authData.user.id, {
+              email: trimmedEmail,
+              reason: formData.reason || 'その他',
+              targetDate: formData.targetDate || null,
+              situation: '',
+            });
+            // 少し待ってから再取得
+            await new Promise(resolve => setTimeout(resolve, 300));
+            userProfile = await getUser(authData.user.id);
+          } catch (createError) {
+            console.warn('ユーザー情報作成エラー:', createError);
+            // 最小限のユーザー情報で続行
+            userProfile = {
+              id: authData.user.id,
+              email: trimmedEmail,
+              reason: formData.reason || 'その他',
+              target_date: formData.targetDate || null,
+              situation: '',
+            };
+          }
+        }
+
+        // WebAuthn登録（バックグラウンド、エラーは無視）
+        if (isWebAuthnAvailable()) {
+          const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
+          if (!existingCredential) {
+            registerWebAuthn(authData.user.id, trimmedEmail).catch((err) => {
+              console.warn('WebAuthn登録エラー:', err);
+            });
+          }
+        }
+
+        // 登録成功、自動的にログインしてアプリに遷移
+        onLogin(userProfile);
         return;
       } else {
         // ログイン処理: Supabase標準機能を使用
@@ -3619,10 +3748,60 @@ const ExportView = ({ logs, userProfile, onShowPremium }) => {
 };
 
 // --- メッセージ機能 ---
-const MessagesView = () => {
+const MessagesView = ({ user }) => {
   const [messages, setMessages] = useState([
     { id: 1, from: "リコログ事務局", subject: "【重要】データのバックアップについて", body: "万が一の紛失に備え、定期的にPDF出力を行い、外部の安全な場所に保管することを推奨します。", date: "2025/01/10", read: true },
   ]);
+  const [inquiryMessage, setInquiryMessage] = useState('');
+  const [inquirySubject, setInquirySubject] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState(null); // 'success' | 'error' | null
+
+  const handleSendInquiry = async () => {
+    if (!inquiryMessage.trim()) {
+      alert('お問い合わせ内容を入力してください');
+      return;
+    }
+
+    setIsSending(true);
+    setSendStatus(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userEmail = sessionData?.session?.user?.email || user?.email || '';
+      const userId = sessionData?.session?.user?.id || user?.id || null;
+
+      const { data, error } = await supabase.functions.invoke('send-inquiry', {
+        body: {
+          message: inquiryMessage.trim(),
+          subject: inquirySubject.trim() || 'お問い合わせ',
+          userEmail: userEmail,
+          userId: userId,
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        setSendStatus('success');
+        setInquiryMessage('');
+        setInquirySubject('');
+        setTimeout(() => {
+          setSendStatus(null);
+        }, 5000);
+      } else {
+        throw new Error(data?.message || '送信に失敗しました');
+      }
+    } catch (error) {
+      console.error('お問い合わせ送信エラー:', error);
+      setSendStatus('error');
+      alert(error.message || 'お問い合わせの送信に失敗しました。もう一度お試しください。');
+    } finally {
+      setIsSending(false);
+    }
+  };
 
     return (
     <div className="p-4 pb-24">
@@ -3648,11 +3827,51 @@ const MessagesView = () => {
         <div className="mt-8 border-t pt-4">
           <h3 className="text-sm font-bold text-gray-500 mb-2">運営へのお問い合わせ</h3>
           <p className="text-[10px] text-gray-400 mb-2">※法的な相談はここでは受け付けておりません。システムの不具合や機能要望のみお送りください。</p>
+          
+          {sendStatus === 'success' && (
+            <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg text-xs mb-3">
+              ✓ お問い合わせを送信しました。確認メールをお送りしました。
+            </div>
+          )}
+          
+          {sendStatus === 'error' && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-xs mb-3">
+              ✗ 送信に失敗しました。もう一度お試しください。
+            </div>
+          )}
+          
+          <input
+            type="text"
+            className="w-full bg-gray-50 border border-gray-200 rounded p-2 text-xs mb-2"
+            placeholder="件名（任意）"
+            value={inquirySubject}
+            onChange={(e) => setInquirySubject(e.target.value)}
+            disabled={isSending}
+          />
           <textarea 
             className="w-full bg-gray-50 border border-gray-200 rounded p-3 text-sm h-24 mb-2"
             placeholder="お問い合わせ内容"
+            value={inquiryMessage}
+            onChange={(e) => setInquiryMessage(e.target.value)}
+            disabled={isSending}
           ></textarea>
-          <button className="bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded">送信する</button>
+          <button 
+            className="bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            onClick={handleSendInquiry}
+            disabled={isSending || !inquiryMessage.trim()}
+          >
+            {isSending ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                送信中...
+              </>
+            ) : (
+              <>
+                <Send size={14} />
+                送信する
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
@@ -5005,7 +5224,7 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
   );
 };
 
-const AddLogView = ({ onSave, onCancel, onShowPremium }) => {
+const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose }) => {
   const [category, setCategory] = useState("モラハラ");
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
@@ -6194,6 +6413,11 @@ const MainApp = ({ onLock, user, onLogout }) => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [selectedLogIndex, setSelectedLogIndex] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [showAddLogGuide, setShowAddLogGuide] = useState(false);
+  // ホーム画面追加案内の表示状態
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   // ログデータの読み込み
   useEffect(() => {
@@ -6228,6 +6452,30 @@ const MainApp = ({ onLock, user, onLogout }) => {
 
     loadLogs();
   }, [user?.id]);
+
+  // ホーム画面追加案内の表示（携帯端末で、まだ追加していない場合のみ）
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    // 既にホーム画面に追加済みの場合は表示しない
+    if (isStandaloneMode()) return;
+    
+    // デスクトップの場合は表示しない
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) return;
+    
+    // 既に案内を表示したかどうかをlocalStorageで確認
+    const installPromptShown = localStorage.getItem('riko_install_prompt_shown');
+    if (installPromptShown) return;
+    
+    // ログイン後、少し待ってから案内を表示
+    const timer = setTimeout(() => {
+      setShowInstallPrompt(true);
+      localStorage.setItem('riko_install_prompt_shown', 'true');
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [user]);
 
   const addLog = async (newLog) => {
     if (!user?.id) return;
@@ -6407,7 +6655,7 @@ const MainApp = ({ onLock, user, onLogout }) => {
         {view === "dashboard" && <DashboardView logs={logs} userProfile={user} onShowDiagnosis={() => setView("diagnosis")} onShowLifeSupport={() => setView("lifeSupport")} onShowPremium={() => setView("premium")} />}
         {view === "timeline" && <TimelineView logs={logs} onLogClick={handleLogClick} userProfile={user} onShowPremium={() => setView("premium")} />}
         {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
-        {view === "messages" && <MessagesView />}
+        {view === "messages" && <MessagesView user={user} />}
         {view === "board" && <BoardView />}
         {view === "safety" && <SafetyView />}
         {view === "export" && <ExportView logs={logs} userProfile={user} onShowPremium={() => setView("premium")} />}
@@ -6435,6 +6683,61 @@ const MainApp = ({ onLock, user, onLogout }) => {
         <NavBtn icon={Mail} label="受信箱" active={view === "messages"} onClick={() => setView("messages")} />
         <NavBtn icon={MessageSquare} label="掲示板" active={view === "board"} onClick={() => setView("board")} />
       </nav>
+
+      {/* ホーム画面追加案内（携帯端末のみ） */}
+      {showInstallPrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Home size={24} className="text-pink-600" />
+                ホーム画面に追加
+              </h2>
+              <button
+                onClick={() => setShowInstallPrompt(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-6">
+              リコログをホーム画面に追加すると、電卓アイコンからすぐにアクセスできます。
+              <br />
+              より便利にご利用いただけます。
+            </p>
+
+            <div className="space-y-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-bold text-blue-900 mb-2">📱 iPhoneの場合：</p>
+                <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+                  <li>画面下部の「共有」ボタン（□↑アイコン）をタップ</li>
+                  <li>「ホーム画面に追加」を選択</li>
+                  <li>「追加」をタップ</li>
+                </ol>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm font-bold text-green-900 mb-2">🤖 Androidの場合：</p>
+                <ol className="text-xs text-green-800 space-y-1 list-decimal list-inside">
+                  <li>メニュー（⋮）をタップ</li>
+                  <li>「ホーム画面に追加」を選択</li>
+                  <li>「追加」をタップ</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setShowInstallPrompt(false)}
+                className="flex-1 bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-lg transition"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

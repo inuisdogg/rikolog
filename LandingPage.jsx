@@ -117,54 +117,26 @@ export default function LandingPage() {
       if (functionData?.success === true) {
         // メール送信が失敗した場合
         if (functionData.emailSent === false) {
-          // パスワードが返されている場合は表示
-          if (functionData.password) {
-            setTempPassword(functionData.password);
-            setShowPassword(true);
-            setError('メール送信に失敗しましたが、ユーザーは作成されました。以下のパスワードでログインしてください。');
-          } else {
-            let errorMessage = 'ユーザーは作成されましたが、メール送信に失敗しました。';
-            if (functionData.emailError) {
-              errorMessage += ` (${functionData.emailError})`;
-            }
-            errorMessage += ' 管理者にお問い合わせください。';
-            setError(errorMessage);
+          let errorMessage = 'メール送信に失敗しました。';
+          if (functionData.emailError) {
+            errorMessage += ` (${functionData.emailError})`;
           }
+          errorMessage += ' もう一度お試しください。';
+          setError(errorMessage);
           setIsLoading(false);
-          return;
-        }
-        
-        // 既存ユーザーの場合でも成功として扱う
-        if (functionData.isNewUser === false) {
-          setIsSuccess(true);
-          setTimeout(() => {
-            setShowEmailModal(false);
-            setIsSuccess(false);
-            setEmail('');
-            setPurpose('');
-            // 既存ユーザーの場合はログイン画面に遷移
-            navigate('/app');
-          }, 3000);
           return;
         }
       } else {
         // successがfalseの場合
-        const errorMsg = functionData?.message || functionData?.error || '登録に失敗しました。';
+        const errorMsg = functionData?.message || functionData?.error || 'メール送信に失敗しました。';
         setError(errorMsg);
         setIsLoading(false);
         return;
       }
 
-      // 成功
+      // 成功：メール送信完了
       setIsSuccess(true);
-      setTimeout(() => {
-        setShowEmailModal(false);
-        setIsSuccess(false);
-        setEmail('');
-        setPurpose('');
-        // 登録後、サービスページに遷移
-        navigate('/app');
-      }, 2000);
+      // 自動的に閉じない（ユーザーが手動で閉じる）
     } catch (err) {
       console.error('メールアドレス保存エラー:', err);
       console.error('エラー詳細:', JSON.stringify(err, null, 2));
@@ -211,7 +183,7 @@ export default function LandingPage() {
   };
 
   const handleCloseModal = () => {
-    if (!isLoading) {
+    if (!isLoading && !isSuccess) {
       setShowEmailModal(false);
       setEmail('');
       setPurpose('');
@@ -894,21 +866,21 @@ export default function LandingPage() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <CheckCircle className="text-green-600" size={32} />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">処理完了</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">メール送信完了</h2>
                 <p className="text-sm text-gray-600 mb-6">
-                  {functionData?.isNewUser === false 
-                    ? 'このメールアドレスは既に登録されています。' 
-                    : '登録が完了しました。'}<br />
-                  ログイン情報をメールでお送りしました。<br />
+                  サービスページへの招待メールをお送りしました。<br />
                   メールボックスをご確認ください。
                 </p>
                 <p className="text-xs text-gray-500">
-                  メールに記載されているログイン情報で<br />
-                  すぐにサービスをご利用いただけます。
+                  メールに記載されているリンクからサービスページにアクセスし、<br />
+                  新規登録を行ってください。
                 </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  このウィンドウは自動的に閉じます
-                </p>
+                <button
+                  onClick={handleCloseModal}
+                  className="mt-4 w-full bg-pink-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-pink-700 transition shadow-lg"
+                >
+                  閉じる
+                </button>
               </div>
             )}
           </div>
