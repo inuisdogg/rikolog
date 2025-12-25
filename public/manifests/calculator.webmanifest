@@ -2,7 +2,7 @@
   "name": "電卓",
   "short_name": "電卓",
   "description": "電卓",
-  "start_url": "/app",
+  "start_url": "https://www.rikolog.net/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",

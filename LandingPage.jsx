@@ -46,27 +46,33 @@ export default function LandingPage() {
   // LPのページタイトルを「リコログ」に設定
   useEffect(() => {
     document.title = 'リコログ';
+    
     // manifestを/appのものに変更（ホーム画面追加時に/appから起動するように）
-    const manifestLink = document.getElementById('app-manifest');
-    if (manifestLink) {
-      // バージョン付きURLで確実に読み込む
-      const v = Date.now();
-      manifestLink.setAttribute('href', `/manifests/calculator.webmanifest?v=${v}`);
-      
-      // manifestを強制的に再読み込み
-      const link = document.createElement('link');
-      link.rel = 'manifest';
-      link.href = `/manifests/calculator.webmanifest?v=${v}`;
-      document.head.appendChild(link);
-      
-      // 古いmanifestリンクを削除
-      setTimeout(() => {
-        const oldLink = document.getElementById('app-manifest');
-        if (oldLink && oldLink !== link) {
-          oldLink.remove();
-        }
-      }, 100);
+    // 既存のmanifestリンクを削除
+    const existingManifest = document.getElementById('app-manifest');
+    if (existingManifest) {
+      existingManifest.remove();
     }
+    
+    // 既存のmanifestリンク（rel="manifest"）を全て削除
+    const allManifests = document.querySelectorAll('link[rel="manifest"]');
+    allManifests.forEach(link => link.remove());
+    
+    // 新しいmanifestリンクを追加（絶対URLで確実に/appから起動するように）
+    const manifestLink = document.createElement('link');
+    manifestLink.id = 'app-manifest';
+    manifestLink.rel = 'manifest';
+    manifestLink.href = '/manifests/calculator.webmanifest';
+    document.head.appendChild(manifestLink);
+    
+    // iOS用のmetaタグも設定（ホーム画面追加時の起動URLを/appに）
+    let appleMeta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+    if (!appleMeta) {
+      appleMeta = document.createElement('meta');
+      appleMeta.name = 'apple-mobile-web-app-capable';
+      document.head.appendChild(appleMeta);
+    }
+    appleMeta.content = 'yes';
   }, []);
 
   // 利用目的の選択肢
