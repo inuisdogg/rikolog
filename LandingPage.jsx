@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ShieldAlert,
@@ -41,6 +41,16 @@ export default function LandingPage() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
+
+  // LPのページタイトルを「リコログ」に設定
+  useEffect(() => {
+    document.title = 'リコログ';
+    // manifestを/appのものに変更（ホーム画面追加時に/appから起動するように）
+    const manifestLink = document.getElementById('app-manifest');
+    if (manifestLink) {
+      manifestLink.setAttribute('href', '/manifests/calculator.webmanifest');
+    }
+  }, []);
 
   // 利用目的の選択肢
   const purposeOptions = [

@@ -6657,13 +6657,19 @@ const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium }) => {
     
     // 既に案内を表示したかどうかをlocalStorageで確認
     const installPromptShown = localStorage.getItem('riko_install_prompt_shown');
-    if (installPromptShown) return;
+    
+    // 新規登録かどうかを確認（ユーザー登録日時が最近（24時間以内）の場合）
+    const userCreatedAt = user.created_at || user.registered_at;
+    const isNewUser = userCreatedAt && (Date.now() - new Date(userCreatedAt).getTime()) < 24 * 60 * 60 * 1000;
+    
+    // 新規登録の場合は必ず表示、既存ユーザーで既に表示済みの場合は表示しない
+    if (!isNewUser && installPromptShown) return;
     
     // ログイン後、少し待ってから案内を表示
     const timer = setTimeout(() => {
       setShowInstallPrompt(true);
       localStorage.setItem('riko_install_prompt_shown', 'true');
-    }, 2000);
+    }, isNewUser ? 3000 : 2000); // 新規登録の場合は少し長めに待つ
     
     return () => clearTimeout(timer);
   }, [user]);
