@@ -56,8 +56,8 @@ serve(async (req) => {
       )
     }
 
-    // アプリのURLを取得（リクエストから、またはデフォルト値）
-    const finalAppUrl = appUrl || (req.headers.get('origin') ? `${req.headers.get('origin')}/app` : '/app')
+    // アプリのURLを取得（本番環境のURLを使用）
+    const finalAppUrl = appUrl || 'https://rikolog.net/app'
 
     // メール送信（Resend APIを使用）
     if (RESEND_API_KEY) {
@@ -93,6 +93,9 @@ serve(async (req) => {
       </div>
       <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
         ※「7777」と入力してから「=」ボタンを押してください
+      </p>
+      <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
+        💡 電卓のパスワードもヘルプから変えることが可能です
       </p>
       
       <h2>📱 使い方ガイド</h2>
@@ -138,6 +141,8 @@ serve(async (req) => {
       <h2>⚠️ 重要な注意事項</h2>
       <ul>
         <li>電卓のパスコード（7777=）は秘密にしてください</li>
+        <li>電卓のパスワードもヘルプから変えることが可能です</li>
+        <li>パスコードを忘れた場合、「C」ボタンを7秒間押し続けると7777にリセットされます</li>
         <li>緊急時は「緊急ロック」ボタンで即座に電卓に戻れます</li>
         <li>記録したデータはクラウドに自動保存されます</li>
         <li>パスワードは安全に管理してください</li>

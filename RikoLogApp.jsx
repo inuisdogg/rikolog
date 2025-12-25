@@ -310,6 +310,56 @@ const CalculatorMode = ({ onUnlock, user }) => {
   const [display, setDisplay] = useState("0");
   // ユーザー設定のパスコードを使用（デフォルトは7777）
   const PASSCODE = user?.calculator_passcode || "7777";
+  
+  // Cボタンの長押し検出用
+  const cButtonPressTimer = useRef(null);
+  const cButtonPressStartTime = useRef(null);
+  const [isResetting, setIsResetting] = useState(false);
+
+  // Cボタンを押し始めた時
+  const handleCDown = async () => {
+    if (!user?.id) return;
+    
+    cButtonPressStartTime.current = Date.now();
+    setIsResetting(true);
+    
+    // 7秒後にリセット
+    cButtonPressTimer.current = setTimeout(async () => {
+      try {
+        // パスコードを7777にリセット
+        await updateUser(user.id, { calculatorPasscode: '7777' });
+        
+        // 成功メッセージを表示
+        alert('電卓パスコードを7777にリセットしました。\n画面をリロードします。');
+        
+        // 画面をリロードして新しいパスコードを反映
+        window.location.reload();
+      } catch (error) {
+        console.error('パスコードリセットエラー:', error);
+        alert('パスコードのリセットに失敗しました。もう一度お試しください。');
+        setIsResetting(false);
+      }
+    }, 7000);
+  };
+
+  // Cボタンを離した時
+  const handleCUp = () => {
+    if (cButtonPressTimer.current) {
+      clearTimeout(cButtonPressTimer.current);
+      cButtonPressTimer.current = null;
+    }
+    cButtonPressStartTime.current = null;
+    setIsResetting(false);
+  };
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (cButtonPressTimer.current) {
+        clearTimeout(cButtonPressTimer.current);
+      }
+    };
+  }, []);
 
   const handlePress = (val) => {
     if (val === "C") {
@@ -354,9 +404,15 @@ const CalculatorMode = ({ onUnlock, user }) => {
           <button 
             key={i}
             onClick={() => handlePress(btn)}
+            onMouseDown={btn === "C" ? handleCDown : undefined}
+            onMouseUp={btn === "C" ? handleCUp : undefined}
+            onMouseLeave={btn === "C" ? handleCUp : undefined}
+            onTouchStart={btn === "C" ? handleCDown : undefined}
+            onTouchEnd={btn === "C" ? handleCUp : undefined}
             className={`text-2xl rounded-full flex items-center justify-center shadow-lg
               ${btn === "=" || ["/","*","-","+"].includes(btn) ? "bg-orange-500 text-white" : "bg-gray-800 text-white"}
               ${btn === "0" ? "col-span-2 aspect-[2/1]" : "aspect-square"}
+              ${btn === "C" && isResetting ? "bg-red-600 animate-pulse" : ""}
               active:opacity-70 transition-opacity
             `}
           >
@@ -619,10 +675,17 @@ const AuthScreen = ({ onLogin }) => {
             reason: formData.reason || 'その他',
             targetDate: formData.targetDate || null,
             situation: '',
+            calculatorPasscode: '7777', // デフォルトパスコード
           });
         } catch (createError) {
-          console.warn('usersテーブルへの保存エラー:', createError);
-          // エラーでも続行
+          console.error('usersテーブルへの保存エラー:', createError);
+          console.error('エラー詳細:', {
+            message: createError?.message,
+            code: createError?.code,
+            details: createError?.details,
+            hint: createError?.hint
+          });
+          // エラーでも続行（後で再試行する）
         }
 
         // premium_subscriptionsテーブルに無料プランを設定
@@ -645,10 +708,12 @@ const AuthScreen = ({ onLogin }) => {
         }
 
         // 登録完了メールを送信（非同期、エラーでも続行）
+        // 本番URLを明示的に指定（ローカル開発環境でも本番URLを使用）
+        const productionAppUrl = 'https://rikolog.net/app';
         supabase.functions.invoke('send-welcome-email', {
           body: { 
             email: trimmedEmail,
-            appUrl: window.location.origin + '/app'
+            appUrl: productionAppUrl
           }
         }).catch((emailError) => {
           console.warn('登録完了メール送信エラー:', emailError);
@@ -680,12 +745,19 @@ const AuthScreen = ({ onLogin }) => {
               reason: formData.reason || 'その他',
               targetDate: formData.targetDate || null,
               situation: '',
+              calculatorPasscode: '7777', // デフォルトパスコード
             });
             // 少し待ってから再取得
             await new Promise(resolve => setTimeout(resolve, 300));
             userProfile = await getUser(authData.user.id);
           } catch (createError) {
-            console.warn('ユーザー情報作成エラー:', createError);
+            console.error('ユーザー情報作成エラー:', createError);
+            console.error('エラー詳細:', {
+              message: createError?.message,
+              code: createError?.code,
+              details: createError?.details,
+              hint: createError?.hint
+            });
             // 最小限のユーザー情報で続行
             userProfile = {
               id: authData.user.id,
@@ -693,6 +765,7 @@ const AuthScreen = ({ onLogin }) => {
               reason: formData.reason || 'その他',
               target_date: formData.targetDate || null,
               situation: '',
+              calculator_passcode: '7777', // デフォルトパスコード
             };
           }
         }
@@ -1445,10 +1518,20 @@ const SafetyView = () => {
                     if (updatedUser) {
                       setUser(updatedUser);
                     }
+                    setPasscode(''); // 入力欄をクリア
                     alert('✅ 電卓パスコードを変更しました');
                   } catch (error) {
                     console.error('パスコード変更エラー:', error);
-                    setPasscodeError('パスコードの変更に失敗しました');
+                    // エラーの詳細を取得
+                    let errorMessage = 'パスコードの変更に失敗しました';
+                    if (error?.message) {
+                      errorMessage += `: ${error.message}`;
+                    } else if (error?.error?.message) {
+                      errorMessage += `: ${error.error.message}`;
+                    } else if (typeof error === 'string') {
+                      errorMessage += `: ${error}`;
+                    }
+                    setPasscodeError(errorMessage);
                   } finally {
                     setIsChangingPasscode(false);
                   }

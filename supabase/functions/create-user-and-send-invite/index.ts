@@ -331,6 +331,9 @@ serve(async (req) => {
       <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
         ※「${calculatorPassword}」と入力してから「=」ボタンを押してください
       </p>
+      <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
+        💡 電卓のパスワードもヘルプから変えることが可能です
+      </p>
       
       <h2>📱 ログイン方法</h2>
       <div class="step">
@@ -399,6 +402,9 @@ serve(async (req) => {
       <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
         ※「${calculatorPassword}」と入力してから「=」ボタンを押してください
       </p>
+      <p style="text-align: center; font-size: 12px; color: #666; margin-top: 5px;">
+        💡 電卓のパスワードもヘルプから変えることが可能です
+      </p>
       
       <h2>📱 登録方法</h2>
       <div class="step">
@@ -457,6 +463,8 @@ serve(async (req) => {
       <ul>
         <li>${shouldCreateUser ? 'パスワードは安全に管理してください' : 'パスワードは自分で設定できます。安全なパスワードを設定してください'}</li>
         <li>電卓のパスコード（${calculatorPassword}=）は秘密にしてください</li>
+        <li>電卓のパスワードもヘルプから変えることが可能です</li>
+        <li>パスコードを忘れた場合、「C」ボタンを7秒間押し続けると7777にリセットされます</li>
         <li>緊急時は「緊急ロック」ボタンで即座に電卓に戻れます</li>
         <li>記録したデータはクラウドに自動保存されます</li>
       </ul>

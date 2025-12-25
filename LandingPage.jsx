@@ -72,11 +72,13 @@ export default function LandingPage() {
 
     try {
       // Edge Functionでユーザーを作成し、招待メールを送信
+      // 本番URLを明示的に指定（ローカル開発環境でも本番URLを使用）
+      const productionAppUrl = 'https://rikolog.net/app';
       const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
         body: { 
           email: email,
           purpose: purpose || null,
-          appUrl: window.location.origin + '/app'
+          appUrl: productionAppUrl
         }
       });
 

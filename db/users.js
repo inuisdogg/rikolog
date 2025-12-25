@@ -66,6 +66,7 @@ export async function createUser(userId, userData) {
         reason: userData.reason,
         target_date: userData.targetDate || null,
         situation: userData.situation || '',
+        calculator_passcode: userData.calculatorPasscode || '7777', // デフォルト値
       });
     
     if (error) throw error;
@@ -88,13 +89,40 @@ export async function updateUser(userId, updates) {
     if (updates.reason !== undefined) updateData.reason = updates.reason;
     if (updates.targetDate !== undefined) updateData.target_date = updates.targetDate;
     if (updates.situation !== undefined) updateData.situation = updates.situation;
+    if (updates.calculatorPasscode !== undefined) updateData.calculator_passcode = updates.calculatorPasscode;
     
-    const { error } = await supabase
+    // 更新データが空の場合はエラー
+    if (Object.keys(updateData).length === 0) {
+      throw new Error('更新するデータが指定されていません');
+    }
+    
+    const { data, error } = await supabase
       .from('users')
       .update(updateData)
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase更新エラー:', error);
+      // エラーメッセージをより分かりやすく
+      let errorMessage = error.message || 'データベースの更新に失敗しました';
+      
+      // よくあるエラーの詳細化
+      if (error.code === '42501') {
+        errorMessage = '権限がありません。ログインし直してください。';
+      } else if (error.code === 'PGRST116') {
+        errorMessage = 'ユーザー情報が見つかりませんでした。';
+      } else if (error.code === '23505') {
+        errorMessage = 'この値は既に使用されています。';
+      }
+      
+      const enhancedError = new Error(errorMessage);
+      enhancedError.originalError = error;
+      throw enhancedError;
+    }
+    
+    // 更新されたデータを返す
+    return data?.[0] || null;
   } catch (error) {
     console.error('ユーザー情報の更新エラー:', error);
     throw error;
