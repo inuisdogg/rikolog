@@ -30,6 +30,7 @@ import {
   Send
 } from 'lucide-react';
 import { supabase } from './supabase.config.js';
+import { getDeviceType, getDeviceInfo } from './db/device.js';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -84,11 +85,16 @@ export default function LandingPage() {
       // Edge Functionでユーザーを作成し、招待メールを送信
       // 本番URLを明示的に指定（ローカル開発環境でも本番URLを使用）
       const productionAppUrl = 'https://rikolog.net/app';
+      // デバイス情報を取得
+      const deviceType = getDeviceType();
+      const deviceInfo = getDeviceInfo();
       const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
         body: { 
           email: email,
           purpose: purpose || null,
-          appUrl: productionAppUrl
+          appUrl: productionAppUrl,
+          deviceType: deviceType,
+          deviceInfo: deviceInfo
         }
       });
 

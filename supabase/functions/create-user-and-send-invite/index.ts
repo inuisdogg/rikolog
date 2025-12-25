@@ -49,7 +49,7 @@ serve(async (req) => {
       )
     }
 
-    const { email, purpose, appUrl, password: providedPassword } = requestData
+    const { email, purpose, appUrl, password: providedPassword, deviceType, deviceInfo } = requestData
 
     if (!email) {
       return new Response(
@@ -232,6 +232,8 @@ serve(async (req) => {
             email: email,
             reason: purpose || 'その他',
             registered_at: new Date().toISOString(),
+            device_type: deviceType || null,
+            device_info: deviceInfo || null,
           })
 
         if (userInsertError) {

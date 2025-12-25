@@ -1,6 +1,7 @@
 // ユーザー情報のCRUD操作
 
 import { supabase } from '../supabase.config.js';
+import { getDeviceType, getDeviceInfo } from './device.js';
 
 /**
  * ユーザー情報を取得
@@ -58,6 +59,10 @@ export async function getCurrentUser() {
  */
 export async function createUser(userId, userData) {
   try {
+    // デバイス情報を取得
+    const deviceType = getDeviceType();
+    const deviceInfo = getDeviceInfo();
+    
     const { error } = await supabase
       .from('users')
       .insert({
@@ -67,6 +72,8 @@ export async function createUser(userId, userData) {
         target_date: userData.targetDate || null,
         situation: userData.situation || '',
         calculator_passcode: userData.calculatorPasscode || '7777', // デフォルト値
+        device_type: deviceType, // デバイスタイプ
+        device_info: deviceInfo, // デバイス情報（JSON形式）
       });
     
     if (error) throw error;
@@ -90,6 +97,8 @@ export async function updateUser(userId, updates) {
     if (updates.targetDate !== undefined) updateData.target_date = updates.targetDate;
     if (updates.situation !== undefined) updateData.situation = updates.situation;
     if (updates.calculatorPasscode !== undefined) updateData.calculator_passcode = updates.calculatorPasscode;
+    if (updates.deviceType !== undefined) updateData.device_type = updates.deviceType;
+    if (updates.deviceInfo !== undefined) updateData.device_info = updates.deviceInfo;
     
     // 更新データが空の場合はエラー
     if (Object.keys(updateData).length === 0) {
