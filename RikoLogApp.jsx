@@ -309,7 +309,10 @@ const FREE_PLAN_LIMITS = {
 const CalculatorMode = ({ onUnlock, user }) => {
   const [display, setDisplay] = useState("0");
   // ユーザー設定のパスコードを使用（デフォルトは7777）
-  const PASSCODE = user?.calculator_passcode || "7777";
+  // useMemoでuserが変更されたときに再計算
+  const PASSCODE = useMemo(() => {
+    return user?.calculator_passcode || "7777";
+  }, [user?.calculator_passcode]);
   
   // Cボタンの長押し検出用
   const cButtonPressTimer = useRef(null);
@@ -1411,24 +1414,29 @@ const AuthScreen = ({ onLogin }) => {
 };
 
 // --- 3. セーフティ/ヘルプ画面 ---
-const SafetyView = () => {
+const SafetyView = ({ user: propUser, onUserUpdate }) => {
   const [resetting, setResetting] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(propUser);
   const [passcode, setPasscode] = useState('');
   const [isChangingPasscode, setIsChangingPasscode] = useState(false);
   const [passcodeError, setPasscodeError] = useState('');
 
   // ユーザー情報とパスコードを読み込む
   useEffect(() => {
-    const loadUser = async () => {
-      const currentUser = await getCurrentUser();
-      if (currentUser) {
-        setUser(currentUser);
-        setPasscode(currentUser.calculator_passcode || '7777');
-      }
-    };
-    loadUser();
-  }, []);
+    if (propUser) {
+      setUser(propUser);
+      setPasscode(propUser.calculator_passcode || '7777');
+    } else {
+      const loadUser = async () => {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          setPasscode(currentUser.calculator_passcode || '7777');
+        }
+      };
+      loadUser();
+    }
+  }, [propUser]);
 
   const resetCacheAndReload = async () => {
     setResetting(true);
@@ -1517,9 +1525,13 @@ const SafetyView = () => {
                     const updatedUser = await getCurrentUser();
                     if (updatedUser) {
                       setUser(updatedUser);
+                      // MainAppのcurrentUserも更新
+                      if (onUserUpdate) {
+                        onUserUpdate(updatedUser);
+                      }
                     }
                     setPasscode(''); // 入力欄をクリア
-                    alert('✅ 電卓パスコードを変更しました');
+                    alert('✅ 電卓パスコードを変更しました。\n次回の電卓画面から新しいパスコードが有効になります。');
                   } catch (error) {
                     console.error('パスコード変更エラー:', error);
                     // エラーの詳細を取得
@@ -6596,7 +6608,7 @@ const PremiumPlanView = ({ user, onClose }) => {
 };
 
 // --- MainApp ---
-const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium }) => {
+const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium, onUserUpdate }) => {
   const [view, setView] = useState("dashboard"); // dashboard, timeline, add, messages, board, export, safety, lifeSupport, premium
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
@@ -6655,20 +6667,21 @@ const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium }) => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     if (!isMobile) return;
     
-    // 既に案内を表示したかどうかをlocalStorageで確認
-    const installPromptShown = localStorage.getItem('riko_install_prompt_shown');
+    // セッションごとに1回だけ表示（sessionStorageを使用）
+    const sessionKey = 'riko_install_prompt_shown_session';
+    const installPromptShownThisSession = sessionStorage.getItem(sessionKey);
+    
+    // このセッションで既に表示した場合は表示しない
+    if (installPromptShownThisSession) return;
     
     // 新規登録かどうかを確認（ユーザー登録日時が最近（24時間以内）の場合）
     const userCreatedAt = user.created_at || user.registered_at;
     const isNewUser = userCreatedAt && (Date.now() - new Date(userCreatedAt).getTime()) < 24 * 60 * 60 * 1000;
     
-    // 新規登録の場合は必ず表示、既存ユーザーで既に表示済みの場合は表示しない
-    if (!isNewUser && installPromptShown) return;
-    
-    // ログイン後、少し待ってから案内を表示
+    // ログイン後、少し待ってから案内を表示（ログイン後の最初の1回のみ）
     const timer = setTimeout(() => {
       setShowInstallPrompt(true);
-      localStorage.setItem('riko_install_prompt_shown', 'true');
+      sessionStorage.setItem(sessionKey, 'true'); // セッションストレージに保存
     }, isNewUser ? 3000 : 2000); // 新規登録の場合は少し長めに待つ
     
     return () => clearTimeout(timer);
@@ -6837,7 +6850,7 @@ const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium }) => {
         {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} isPremium={mainIsPremium} />}
         {view === "messages" && <MessagesView user={user} />}
         {view === "board" && <BoardView />}
-        {view === "safety" && <SafetyView />}
+        {view === "safety" && <SafetyView user={user} onUserUpdate={onUserUpdate} />}
         {view === "export" && <ExportView logs={logs} userProfile={user} onShowPremium={() => setView("premium")} isPremium={mainIsPremium} />}
         {view === "diagnosis" && <CompensationDiagnosisView logs={logs} onClose={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
         {view === "lifeSupport" && <LifeSupportView onClose={() => setView("dashboard")} />}
@@ -7250,7 +7263,13 @@ export default function RikoLogApp() {
     if (isLoading) {
       // セッション確認中は、既にログイン済みの場合はメインアプリを表示、未ログインの場合はログイン画面を表示
       if (currentUser) {
-        return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} isPremium={isPremium} />;
+        return <MainApp 
+          onLock={() => setIsUnlocked(false)} 
+          user={currentUser} 
+          onLogout={handleLogout} 
+          isPremium={isPremium}
+          onUserUpdate={(updatedUser) => setCurrentUser(updatedUser)}
+        />;
       }
       return <AuthScreen onLogin={handleLogin} />;
     }
@@ -7259,7 +7278,13 @@ export default function RikoLogApp() {
       return <AuthScreen onLogin={handleLogin} />;
     }
 
-    return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} isPremium={isPremium} />;
+    return <MainApp 
+      onLock={() => setIsUnlocked(false)} 
+      user={currentUser} 
+      onLogout={handleLogout} 
+      isPremium={isPremium}
+      onUserUpdate={(updatedUser) => setCurrentUser(updatedUser)}
+    />;
   } catch (error) {
     console.error("アプリのレンダリングエラー:", error);
     return (

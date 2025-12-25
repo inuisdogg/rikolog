@@ -49,7 +49,23 @@ export default function LandingPage() {
     // manifestを/appのものに変更（ホーム画面追加時に/appから起動するように）
     const manifestLink = document.getElementById('app-manifest');
     if (manifestLink) {
-      manifestLink.setAttribute('href', '/manifests/calculator.webmanifest');
+      // バージョン付きURLで確実に読み込む
+      const v = Date.now();
+      manifestLink.setAttribute('href', `/manifests/calculator.webmanifest?v=${v}`);
+      
+      // manifestを強制的に再読み込み
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = `/manifests/calculator.webmanifest?v=${v}`;
+      document.head.appendChild(link);
+      
+      // 古いmanifestリンクを削除
+      setTimeout(() => {
+        const oldLink = document.getElementById('app-manifest');
+        if (oldLink && oldLink !== link) {
+          oldLink.remove();
+        }
+      }, 100);
     }
   }, []);
 
