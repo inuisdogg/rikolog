@@ -185,7 +185,7 @@ export default function LandingPage() {
   };
 
   const handleCloseModal = () => {
-    if (!isLoading && !isSuccess) {
+    if (!isLoading) {
       setShowEmailModal(false);
       setEmail('');
       setPurpose('');

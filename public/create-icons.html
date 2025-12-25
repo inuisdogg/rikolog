@@ -9,54 +9,83 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // 背景（黒）
-    ctx.fillStyle = '#1a1a1a';
+    // 背景（黒）- 余白を最小限に
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, 512, 512);
     
-    // 電卓の本体
-    ctx.fillStyle = '#2a2a2a';
-    ctx.fillRect(60, 60, 392, 432);
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 8;
-    ctx.strokeRect(60, 60, 392, 432);
+    // 電卓の本体 - 画面全体を使う（余白10px）
+    const padding = 10;
+    const calcWidth = 512 - padding * 2;
+    const calcHeight = 512 - padding * 2;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(padding, padding, calcWidth, calcHeight);
     
-    // ディスプレイ
+    // 電卓のフレーム
+    ctx.strokeStyle = '#333333';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(padding, padding, calcWidth, calcHeight);
+    
+    // ディスプレイ（上部）
+    const displayY = padding + 20;
+    const displayHeight = 70;
     ctx.fillStyle = '#000000';
-    ctx.fillRect(100, 100, 312, 80);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('0', 256, 160);
+    ctx.fillRect(padding + 20, displayY, calcWidth - 40, displayHeight);
     
-    // ボタン（数字）
-    ctx.fillStyle = '#333333';
+    // ディスプレイの数字
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 56px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('0', 256, displayY + 50);
+    
+    // ボタンエリア（中央から下）
+    const buttonStartY = displayY + displayHeight + 30;
+    const buttonSize = 60;
+    const buttonSpacing = 15;
+    
+    // 数字ボタン（1-9）
+    ctx.fillStyle = '#2a2a2a';
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
+        const x = padding + 30 + col * (buttonSize + buttonSpacing);
+        const y = buttonStartY + row * (buttonSize + buttonSpacing);
         ctx.beginPath();
-        ctx.arc(140 + col * 80, 220 + row * 80, 25, 0, Math.PI * 2);
+        ctx.arc(x + buttonSize/2, y + buttonSize/2, buttonSize/2 - 2, 0, Math.PI * 2);
         ctx.fill();
+        // 数字
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        const num = (2 - row) * 3 + col + 1;
+        ctx.fillText(num.toString(), x + buttonSize/2, y + buttonSize/2 + 10);
+        ctx.fillStyle = '#2a2a2a';
       }
     }
     
-    // 演算子ボタン（オレンジ）
+    // 演算子ボタン（右側）
     ctx.fillStyle = '#ff9500';
+    const opX = padding + calcWidth - 30 - buttonSize;
     for (let row = 0; row < 3; row++) {
+      const y = buttonStartY + row * (buttonSize + buttonSpacing);
       ctx.beginPath();
-      ctx.arc(380, 220 + row * 80, 25, 0, Math.PI * 2);
+      ctx.arc(opX + buttonSize/2, y + buttonSize/2, buttonSize/2 - 2, 0, Math.PI * 2);
       ctx.fill();
     }
     
+    // 0ボタンと=ボタン（最下部）
+    const bottomY = buttonStartY + 3 * (buttonSize + buttonSpacing);
     // 0ボタン
-    ctx.fillStyle = '#333333';
-    ctx.fillRect(120, 420, 120, 50);
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.arc(padding + 30 + buttonSize/2, bottomY + buttonSize/2, buttonSize/2 - 2, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px Arial';
-    ctx.fillText('0', 180, 450);
+    ctx.font = 'bold 28px Arial';
+    ctx.fillText('0', padding + 30 + buttonSize/2, bottomY + buttonSize/2 + 10);
     
     // =ボタン
     ctx.fillStyle = '#ff9500';
     ctx.beginPath();
-    ctx.arc(380, 445, 25, 0, Math.PI * 2);
+    ctx.arc(opX + buttonSize/2, bottomY + buttonSize/2, buttonSize/2 - 2, 0, Math.PI * 2);
     ctx.fill();
     
     // 画像をダウンロード
@@ -85,6 +114,8 @@
   </script>
 </body>
 </html>
+
+
 
 
 

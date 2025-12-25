@@ -336,31 +336,14 @@ serve(async (req) => {
       </p>
       
       <h2>📱 ログイン方法</h2>
-      <div class="step">
-        <h3>手順1：アプリを開く</h3>
-        <p>以下のボタンからログイン画面にアクセスしてください。</p>
-        <p style="text-align: center; margin: 20px 0;">
-          <a href="${loginUrl}" class="button">今すぐログインする</a>
-        </p>
-      </div>
-      
-      <div class="step">
-        <h3>手順2：ログイン</h3>
-        <ol>
-          <li>メールアドレスとパスワードを入力</li>
-          <li>「ログイン」ボタンをクリック</li>
-        </ol>
-      </div>
-      
-      <div class="step">
-        <h3>手順3：電卓パスコードでアプリを開く</h3>
-        <ol>
-          <li>ログイン後、電卓画面が表示されます</li>
-          <li>電卓画面で「${calculatorPassword}」と入力</li>
-          <li>「=」ボタンを押す</li>
-          <li>アプリが解除されます</li>
-        </ol>
-      </div>
+      <p style="text-align: center; margin: 20px 0;">
+        <a href="${loginUrl}" class="button">今すぐログインする</a>
+      </p>
+      <p style="font-size: 13px; color: #333; margin-top: 15px;">
+        1. 上記ボタンからログイン画面にアクセス<br>
+        2. メールアドレスとパスワードを入力してログイン<br>
+        3. 電卓画面で「${calculatorPassword}」と入力して「=」ボタンを押す
+      </p>
 `
         : `
 <!DOCTYPE html>
@@ -407,66 +390,23 @@ serve(async (req) => {
       </p>
       
       <h2>📱 登録方法</h2>
-      <div class="step">
-        <h3>手順1：新規登録画面にアクセス</h3>
-        <p>以下のボタンから新規登録画面にアクセスしてください。</p>
-        <p style="text-align: center; margin: 20px 0;">
-          <a href="${loginUrl}" class="button">新規登録を開始する</a>
-        </p>
-        <p style="font-size: 12px; color: #666; margin-top: 10px;">
-          ※メールアドレス（${email}）は自動入力されます
-        </p>
-      </div>
-      
-      <div class="step">
-        <h3>手順2：パスワードを設定して登録</h3>
-        <ol>
-          <li>メールアドレス（${email}）が自動入力されていることを確認</li>
-          <li>パスワードを設定（6文字以上）</li>
-          <li>「利用を開始する」ボタンをクリック</li>
-        </ol>
-      </div>
-      
-      <div class="step">
-        <h3>手順3：電卓パスコードでアプリを開く</h3>
-        <ol>
-          <li>ログイン後、電卓画面が表示されます</li>
-          <li>電卓画面で「${calculatorPassword}」と入力</li>
-          <li>「=」ボタンを押す</li>
-          <li>アプリが解除されます</li>
-        </ol>
-      </div>
-      
-      <h2>📱 ホーム画面に追加する方法</h2>
-      
-      <div class="step">
-        <h3>iPhoneの場合：</h3>
-        <ol>
-          <li>Safariでリコログを開きます</li>
-          <li>画面下部の「共有」ボタン（□↑アイコン）をタップ</li>
-          <li>「ホーム画面に追加」を選択</li>
-          <li>「追加」をタップ</li>
-        </ol>
-      </div>
-      
-      <div class="step">
-        <h3>Androidの場合：</h3>
-        <ol>
-          <li>Chromeでリコログを開きます</li>
-          <li>メニュー（⋮）をタップ</li>
-          <li>「ホーム画面に追加」を選択</li>
-          <li>「追加」をタップ</li>
-        </ol>
-      </div>
+      <p style="text-align: center; margin: 20px 0;">
+        <a href="${loginUrl}" class="button">新規登録を開始する</a>
+      </p>
+      <p style="font-size: 12px; color: #666; text-align: center;">
+        ※メールアドレス（${email}）は自動入力されます
+      </p>
+      <p style="font-size: 13px; color: #333; margin-top: 15px;">
+        1. 上記ボタンから新規登録画面にアクセス<br>
+        2. パスワードを設定（6文字以上）して登録<br>
+        3. ログイン後、電卓画面で「${calculatorPassword}」と入力して「=」ボタンを押す
+      </p>
       
       <h2>⚠️ 重要な注意事項</h2>
-      <ul>
-        <li>${shouldCreateUser ? 'パスワードは安全に管理してください' : 'パスワードは自分で設定できます。安全なパスワードを設定してください'}</li>
+      <ul style="font-size: 13px;">
         <li>電卓のパスコード（${calculatorPassword}=）は秘密にしてください</li>
-        <li>電卓のパスワードもヘルプから変えることが可能です</li>
+        <li>電卓のパスワードはヘルプから変更可能です</li>
         <li>パスコードを忘れた場合、「C」ボタンを7秒間押し続けると7777にリセットされます</li>
-        <li>緊急時は「緊急ロック」ボタンで即座に電卓に戻れます</li>
-        <li>記録したデータはクラウドに自動保存されます</li>
       </ul>
       
       <p style="margin-top: 30px; font-size: 12px; color: #666;">
