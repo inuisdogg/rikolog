@@ -27,7 +27,6 @@ import {
   TrendingUp, 
   Calendar,   
   User,
-  ScanFace,
   Fingerprint,
   LifeBuoy,   
   Phone,      
@@ -392,15 +391,33 @@ const CalculatorMode = ({ onUnlock, user }) => {
   ];
 
   return (
-    <div className="h-full w-full flex flex-col bg-black text-white font-sans lg:max-w-md lg:h-auto lg:min-h-[600px] lg:mx-auto lg:shadow-2xl lg:rounded-xl lg:my-8 lg:p-4" style={{ minHeight: '100dvh' }}>
-      <div className="flex-1 flex items-end justify-end p-6 text-6xl font-light font-mono break-all lg:min-h-[200px] min-h-0 overflow-hidden">
+    <div 
+      className="h-full w-full flex flex-col bg-black text-white font-sans lg:max-w-md lg:h-auto lg:min-h-[600px] lg:mx-auto lg:shadow-2xl lg:rounded-xl lg:my-8 lg:p-4" 
+      style={{ 
+        minHeight: '100dvh',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none'
+      }}
+    >
+      <div 
+        className="flex-1 flex items-end justify-end p-6 text-6xl font-light font-mono break-all lg:min-h-[200px] min-h-0 overflow-hidden"
+        style={{
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none'
+        }}
+      >
         {display}
       </div>
       <div 
         className="grid grid-cols-4 gap-4 flex-shrink-0 px-4 pb-4 lg:pb-8" 
         style={{ 
           paddingBottom: 'max(80px, calc(1rem + env(safe-area-inset-bottom) + 3rem))',
-          minHeight: 'fit-content'
+          minHeight: 'fit-content',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none'
         }}
       >
         {buttons.map((btn, i) => (
@@ -418,6 +435,11 @@ const CalculatorMode = ({ onUnlock, user }) => {
               ${btn === "C" && isResetting ? "bg-red-600 animate-pulse" : ""}
               active:opacity-70 transition-opacity
             `}
+            style={{
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              WebkitTouchCallout: 'none'
+            }}
           >
             {btn}
           </button>
@@ -430,7 +452,6 @@ const CalculatorMode = ({ onUnlock, user }) => {
 // --- 2. 認証 & プロフィール登録画面 ---
 const AuthScreen = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
-  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [rememberMe, setRememberMe] = useState(false);
@@ -1041,64 +1062,6 @@ const AuthScreen = ({ onLogin }) => {
     }
   }, []);
 
-  const handleBiometricLogin = async () => {
-    setIsBiometricLoading(true);
-    setError(null);
-    
-    try {
-      // WebAuthn APIが利用可能かチェック
-      if (!isWebAuthnAvailable()) {
-        setError("このデバイスは生体認証に対応していません。\n\nパスワードでログインしてください。");
-        return;
-      }
-
-      // セッションを確認（既にログインしている場合）
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.id) {
-        setError("Face IDを使用するには、まず一度パスワードでログインしてください。\n\n次回からFace IDが使用できます。");
-        return;
-      }
-
-      const userId = session.user.id;
-
-      // WebAuthn認証情報が登録されているか確認
-      const savedCredential = localStorage.getItem(`webauthn_credential_${userId}`);
-      if (!savedCredential) {
-        setError("Face IDが登録されていません。\n\nまず一度パスワードでログインすると、次回からFace IDが使用できます。");
-        return;
-      }
-
-      // WebAuthn認証を実行
-      await authenticateWebAuthn(userId);
-
-      // 認証成功後、ユーザー情報を取得
-      const userProfile = await getCurrentUser();
-      if (userProfile) {
-        onLogin({ ...userProfile, id: session.user.id });
-      } else {
-        setError("ユーザー情報が見つかりません");
-      }
-    } catch (error) {
-      console.error("生体認証エラー:", error);
-      
-      let errorMessage = "生体認証に失敗しました";
-      if (error.message) {
-        if (error.message.includes("キャンセル") || error.message.includes("NotAllowedError")) {
-          errorMessage = "認証がキャンセルされました。";
-        } else if (error.message.includes("見つかりません") || error.message.includes("登録されていません")) {
-          errorMessage = "Face IDが登録されていません。\n\nまず一度パスワードでログインしてください。";
-        } else {
-          errorMessage = `生体認証エラー: ${error.message}`;
-        }
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setIsBiometricLoading(false);
-    }
-  };
-
   return (
     <div className="h-screen bg-slate-50 p-4 sm:p-6 flex flex-col justify-center overflow-y-auto" style={{ width: '100%', maxWidth: '100%' }}>
       <div className="text-center mb-6 sm:mb-8">
@@ -1287,27 +1250,6 @@ const AuthScreen = ({ onLogin }) => {
                 処理中...
               </div>
             )}
-            
-
-              {!isRegister && (
-          <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-100">
-              <button 
-                onClick={handleBiometricLogin}
-                disabled={isBiometricLoading}
-              className="w-full bg-slate-100 text-slate-700 font-bold py-2 sm:py-3 rounded-lg border border-slate-200 flex items-center justify-center gap-2 hover:bg-slate-200 transition relative overflow-hidden text-xs sm:text-sm"
-              >
-                {isBiometricLoading ? (
-                  <>
-                  <span className="animate-pulse">Face ID 認証中...</span>
-                  </>
-                ) : (
-                  <>
-                  <ScanFace size={18} className="sm:w-5 sm:h-5" /> Face ID でログイン
-                  </>
-                )}
-              </button>
-            </div>
-          )}
 
           <input 
             type="email" 
