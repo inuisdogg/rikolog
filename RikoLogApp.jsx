@@ -4,7 +4,7 @@ import { PDFDownloadLink, BlobProvider } from '@react-pdf/renderer';
 import { StatementDocument } from './StatementPDF.jsx';
 import { buildStatementDataFromLogs } from './statementTransform.js';
 import { supabase } from './supabase.config.js';
-import { getUser, createUser, getCurrentUser } from './db/users.js';
+import { getUser, createUser, getCurrentUser, updateUser } from './db/users.js';
 import { getUserLogs, createLog, updateLog as updateLogInDB } from './db/logs.js';
 import { isPremiumUser, getPremiumSubscription } from './db/premium.js';
 import { stripePromise, PREMIUM_PRICE_ID, SUPABASE_FUNCTIONS_URL } from './stripe.config.js';
@@ -84,6 +84,9 @@ import {
   HelpCircle,
   ListChecks
 } from 'lucide-react';
+
+// --- アフィリエイト表示設定（将来的に表示する場合は true に変更） ---
+const SHOW_AFFILIATE_SECTIONS = false; // 弁護士相談、探偵相談、離婚後の生活支援の表示/非表示を制御
 
 // --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
 const DISGUISE_STORAGE_KEY = 'riko_disguise';
@@ -303,9 +306,10 @@ const FREE_PLAN_LIMITS = {
 };
 
 // --- 1. カモフラージュ用 電卓モード ---
-const CalculatorMode = ({ onUnlock }) => {
+const CalculatorMode = ({ onUnlock, user }) => {
   const [display, setDisplay] = useState("0");
-  const PASSCODE = "7777"; // 解除コード
+  // ユーザー設定のパスコードを使用（デフォルトは7777）
+  const PASSCODE = user?.calculator_passcode || "7777";
 
   const handlePress = (val) => {
     if (val === "C") {
@@ -1336,6 +1340,22 @@ const AuthScreen = ({ onLogin }) => {
 // --- 3. セーフティ/ヘルプ画面 ---
 const SafetyView = () => {
   const [resetting, setResetting] = useState(false);
+  const [user, setUser] = useState(null);
+  const [passcode, setPasscode] = useState('');
+  const [isChangingPasscode, setIsChangingPasscode] = useState(false);
+  const [passcodeError, setPasscodeError] = useState('');
+
+  // ユーザー情報とパスコードを読み込む
+  useEffect(() => {
+    const loadUser = async () => {
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        setPasscode(currentUser.calculator_passcode || '7777');
+      }
+    };
+    loadUser();
+  }, []);
 
   const resetCacheAndReload = async () => {
     setResetting(true);
@@ -1368,6 +1388,84 @@ const SafetyView = () => {
       </div>
 
       <div className="space-y-4">
+        {/* 電卓パスコード設定 */}
+        <section>
+          <h3 className="text-sm font-bold text-gray-500 mb-2 flex items-center gap-1">
+            <Lock size={16} /> 電卓パスコード設定
+          </h3>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div className="text-xs text-gray-600 leading-relaxed mb-3">
+              電卓画面でアプリを解除するためのパスコードを変更できます。
+              <br />
+              現在のパスコード: <span className="font-bold text-slate-900">{user?.calculator_passcode || '7777'}</span>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  新しいパスコード（数字のみ、4文字以上）
+                </label>
+                <input
+                  type="text"
+                  value={passcode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    setPasscode(value);
+                    setPasscodeError('');
+                  }}
+                  placeholder="7777"
+                  maxLength={10}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-sm"
+                  disabled={isChangingPasscode}
+                />
+              </div>
+              {passcodeError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                  <p className="text-xs text-red-600">{passcodeError}</p>
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  if (!passcode || passcode.length < 4) {
+                    setPasscodeError('パスコードは4文字以上で入力してください');
+                    return;
+                  }
+                  
+                  if (!user?.id) {
+                    setPasscodeError('ユーザー情報が取得できませんでした');
+                    return;
+                  }
+
+                  setIsChangingPasscode(true);
+                  setPasscodeError('');
+
+                  try {
+                    await updateUser(user.id, { calculatorPasscode: passcode });
+                    // ユーザー情報を再取得
+                    const updatedUser = await getCurrentUser();
+                    if (updatedUser) {
+                      setUser(updatedUser);
+                    }
+                    alert('✅ 電卓パスコードを変更しました');
+                  } catch (error) {
+                    console.error('パスコード変更エラー:', error);
+                    setPasscodeError('パスコードの変更に失敗しました');
+                  } finally {
+                    setIsChangingPasscode(false);
+                  }
+                }}
+                disabled={isChangingPasscode || !passcode || passcode.length < 4}
+                className={`w-full font-bold py-2.5 rounded-lg text-xs ${
+                  isChangingPasscode || !passcode || passcode.length < 4
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-pink-600 hover:bg-pink-700 text-white'
+                }`}
+              >
+                {isChangingPasscode ? '変更中...' : 'パスコードを変更'}
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* トラブルシューティング */}
         <section>
           <h3 className="text-sm font-bold text-gray-500 mb-2">トラブルシューティング</h3>
@@ -1982,7 +2080,7 @@ const CompensationDiagnosisView = ({ logs, onClose, onShowPremium }) => {
 };
 
 // --- 4. ダッシュボード（データ管理・自衛） ---
-const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, onShowPremium }) => {
+const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, onShowPremium, isPremium: dashboardIsPremium }) => {
   // 目標件数の管理
   const [targetCount, setTargetCount] = useState(() => {
     try {
@@ -2187,7 +2285,8 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
   }, [logs.length, logsLast7Days, mediaStats.image, mediaStats.audio, mediaStats.video, JSON.stringify(categoryStats), targetCount, progress]);
 
   // --- プレミアムプランチェック ---
-  const isPremium = useMemo(() => checkPremiumStatus(), []);
+  // メインコンポーネントから渡されたisPremiumを使用（なければlocalStorageをチェック）
+  const isPremium = dashboardIsPremium !== undefined ? dashboardIsPremium : useMemo(() => checkPremiumStatus(), []);
 
   // --- ロードマップモーダル ---
   const [isRoadmapModalOpen, setIsRoadmapModalOpen] = useState(false);
@@ -3502,72 +3601,77 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
         </div>
       </button>
 
-      {/* 弁護士に相談する */}
-      <a
-        href="https://www.bengo4.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-              <Users size={16} className="text-blue-600" /> 弁護士に相談する
-            </div>
-            <div className="text-xs text-gray-600 leading-relaxed mb-2">
-              記録をもとに、専門家に早めに相談して方針を整理する。多くの事務所で初回相談無料。
-            </div>
-            <div className="text-xs text-blue-600 font-bold flex items-center gap-1">
-              詳細を見る <ExternalLink size={12} />
-            </div>
-          </div>
-          <ChevronRight size={20} className="text-blue-400 shrink-0 mt-1" />
-        </div>
-      </a>
-
-      {/* 浮気調査を依頼する */}
-      <a
-        href="https://www.private-eye.jp/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block bg-purple-50 border border-purple-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-              <User size={16} className="text-purple-600" /> 浮気調査を依頼する
-            </div>
-            <div className="text-xs text-gray-600 leading-relaxed mb-2">
-              不貞の立証が必要なケース向けに、専門家に依頼できます。GPS調査、行動調査など、様々な調査方法があります。
-            </div>
-            <div className="text-xs text-purple-600 font-bold flex items-center gap-1">
-              詳細を見る <ExternalLink size={12} />
-            </div>
-          </div>
-          <ChevronRight size={20} className="text-purple-400 shrink-0 mt-1" />
-        </div>
-      </a>
-
-      {/* 離婚後の生活支援 */}
-            <button
-        onClick={onShowLifeSupport}
-        className="w-full bg-green-50 border border-green-200 rounded-xl shadow-sm p-4 hover:shadow-md transition text-left relative"
-            >
-              <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-              <HeartHandshake size={16} className="text-green-600" /> 離婚後の生活支援
-                  </div>
-            <div className="text-xs text-gray-600 leading-relaxed mb-2">
-              住まい探し（賃貸・シェアハウス）、仕事探し（転職・パート）、シングルマザー向け保険など、新しい生活を始めるためのサポートサービスをご紹介します。
-                  </div>
-            <div className="text-xs text-green-600 font-bold flex items-center gap-1">
-              詳細を見る <ExternalLink size={12} />
+      {/* アフィリエイトセクション（弁護士相談、探偵相談、離婚後の生活支援） */}
+      {SHOW_AFFILIATE_SECTIONS && (
+        <>
+          {/* 弁護士に相談する */}
+          <a
+            href="https://www.bengo4.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                  <Users size={16} className="text-blue-600" /> 弁護士に相談する
                 </div>
-          </div>
-          <ChevronRight size={20} className="text-green-400 shrink-0 mt-1" />
+                <div className="text-xs text-gray-600 leading-relaxed mb-2">
+                  記録をもとに、専門家に早めに相談して方針を整理する。多くの事務所で初回相談無料。
+                </div>
+                <div className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                  詳細を見る <ExternalLink size={12} />
+                </div>
               </div>
-            </button>
+              <ChevronRight size={20} className="text-blue-400 shrink-0 mt-1" />
+            </div>
+          </a>
+
+          {/* 浮気調査を依頼する */}
+          <a
+            href="https://www.private-eye.jp/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block bg-purple-50 border border-purple-200 rounded-xl shadow-sm p-4 hover:shadow-md transition relative"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                  <User size={16} className="text-purple-600" /> 浮気調査を依頼する
+                </div>
+                <div className="text-xs text-gray-600 leading-relaxed mb-2">
+                  不貞の立証が必要なケース向けに、専門家に依頼できます。GPS調査、行動調査など、様々な調査方法があります。
+                </div>
+                <div className="text-xs text-purple-600 font-bold flex items-center gap-1">
+                  詳細を見る <ExternalLink size={12} />
+                </div>
+              </div>
+              <ChevronRight size={20} className="text-purple-400 shrink-0 mt-1" />
+            </div>
+          </a>
+
+          {/* 離婚後の生活支援 */}
+          <button
+            onClick={onShowLifeSupport}
+            className="w-full bg-green-50 border border-green-200 rounded-xl shadow-sm p-4 hover:shadow-md transition text-left relative"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                  <HeartHandshake size={16} className="text-green-600" /> 離婚後の生活支援
+                </div>
+                <div className="text-xs text-gray-600 leading-relaxed mb-2">
+                  住まい探し（賃貸・シェアハウス）、仕事探し（転職・パート）、シングルマザー向け保険など、新しい生活を始めるためのサポートサービスをご紹介します。
+                </div>
+                <div className="text-xs text-green-600 font-bold flex items-center gap-1">
+                  詳細を見る <ExternalLink size={12} />
+                </div>
+              </div>
+              <ChevronRight size={20} className="text-green-400 shrink-0 mt-1" />
+            </div>
+          </button>
+        </>
+      )}
 
       {/* プレミアムプラン */}
       <button
@@ -3594,9 +3698,10 @@ const DashboardView = ({ logs, userProfile, onShowDiagnosis, onShowLifeSupport, 
 };
 
 // --- 5. 提出用PDFプレビュー画面 ---
-const ExportView = ({ logs, userProfile, onShowPremium }) => {
+const ExportView = ({ logs, userProfile, onShowPremium, isPremium: exportIsPremium }) => {
   const [authorName, setAuthorName] = useState(''); // PDF出力時の申立人名
-  const isPremium = checkPremiumStatus();
+  // メインコンポーネントから渡されたisPremiumを使用（なければlocalStorageをチェック）
+  const isPremium = exportIsPremium !== undefined ? exportIsPremium : checkPremiumStatus();
   const userPlan = getUserPlan();
   const isFreePlan = userPlan === PLAN_TYPES.FREE;
 
@@ -4245,7 +4350,7 @@ const NavBtn = ({ icon: Icon, label, active, onClick, isMain }) => (
   </button>
 );
 
-const LogDetailView = ({ log, onClose, onUpdate }) => {
+const LogDetailView = ({ log, onClose, onUpdate, isPremium: detailIsPremium }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(log.content || '');
   const [editedCategory, setEditedCategory] = useState(log.category || 'モラハラ');
@@ -4253,7 +4358,8 @@ const LogDetailView = ({ log, onClose, onUpdate }) => {
   const [editedAttachments, setEditedAttachments] = useState(log.attachments || []);
   const [newComment, setNewComment] = useState('');
   const comments = log.comments || [];
-  const isPremium = checkPremiumStatus();
+  // メインコンポーネントから渡されたisPremiumを使用（なければlocalStorageをチェック）
+  const isPremium = detailIsPremium !== undefined ? detailIsPremium : checkPremiumStatus();
   const userPlan = getUserPlan();
 
   const categories = ["モラハラ", "暴力・DV", "不貞・浮気", "生活費未払い", "育児放棄", "通院・診断書", "その他"];
@@ -4653,7 +4759,7 @@ const LogDetailView = ({ log, onClose, onUpdate }) => {
   );
 };
 
-const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
+const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium, isPremium: timelineIsPremium }) => {
   const [activeTab, setActiveTab] = useState('list'); // 'list' or 'pdf'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -4663,7 +4769,8 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [authorName, setAuthorName] = useState(''); // PDF出力時の申立人名
 
-  const isPremium = checkPremiumStatus();
+  // メインコンポーネントから渡されたisPremiumを使用（なければlocalStorageをチェック）
+  const isPremium = timelineIsPremium !== undefined ? timelineIsPremium : checkPremiumStatus();
   const userPlan = getUserPlan();
   const isFreePlan = userPlan === PLAN_TYPES.FREE;
 
@@ -5224,12 +5331,13 @@ const TimelineView = ({ logs, onLogClick, userProfile, onShowPremium }) => {
   );
 };
 
-const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose }) => {
+const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, isPremium: addIsPremium }) => {
   const [category, setCategory] = useState("モラハラ");
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [attachments, setAttachments] = useState([]);
-  const isPremium = checkPremiumStatus();
+  // メインコンポーネントから渡されたisPremiumを使用（なければlocalStorageをチェック）
+  const isPremium = addIsPremium !== undefined ? addIsPremium : checkPremiumStatus();
   
   // 容量制限（無料版：合計10MB、プレミアム：無制限）
   const MAX_ATTACHMENTS_FREE = 3;
@@ -6405,7 +6513,7 @@ const PremiumPlanView = ({ user, onClose }) => {
 };
 
 // --- MainApp ---
-const MainApp = ({ onLock, user, onLogout }) => {
+const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium }) => {
   const [view, setView] = useState("dashboard"); // dashboard, timeline, add, messages, board, export, safety, lifeSupport, premium
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
@@ -6580,13 +6688,6 @@ const MainApp = ({ onLock, user, onLogout }) => {
             <ShieldAlert size={18} className="text-pink-500 sm:w-5 sm:h-5" />
             <span>リコログ</span>
           </button>
-          <button 
-            onClick={() => navigate('/')} 
-            className="text-xs text-slate-300 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition"
-            title="ランディングページに戻る"
-          >
-            LP
-          </button>
         </div>
         <div className="flex items-center gap-2 relative">
           {/* メニューボタン */}
@@ -6606,16 +6707,6 @@ const MainApp = ({ onLock, user, onLogout }) => {
                   onClick={() => setIsMenuOpen(false)}
                 />
                 <div className="absolute right-0 top-full mt-2 bg-slate-800 rounded-lg shadow-xl border border-slate-700 min-w-[160px] z-50 overflow-hidden">
-                  <button
-                    onClick={() => {
-                      navigate('/');
-                      setIsMenuOpen(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left hover:bg-slate-700 transition-colors flex items-center gap-2 text-slate-300 text-sm"
-                  >
-                    <Home size={16} />
-                    <span>LPに戻る</span>
-                  </button>
                   <button
                     onClick={() => {
                       setView('safety');
@@ -6652,13 +6743,13 @@ const MainApp = ({ onLock, user, onLogout }) => {
       </header>
 
       <div className="min-h-screen" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))', paddingBottom: '8rem' }}>
-        {view === "dashboard" && <DashboardView logs={logs} userProfile={user} onShowDiagnosis={() => setView("diagnosis")} onShowLifeSupport={() => setView("lifeSupport")} onShowPremium={() => setView("premium")} />}
-        {view === "timeline" && <TimelineView logs={logs} onLogClick={handleLogClick} userProfile={user} onShowPremium={() => setView("premium")} />}
-        {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
+        {view === "dashboard" && <DashboardView logs={logs} userProfile={user} onShowDiagnosis={() => setView("diagnosis")} onShowLifeSupport={() => setView("lifeSupport")} onShowPremium={() => setView("premium")} isPremium={mainIsPremium} />}
+        {view === "timeline" && <TimelineView logs={logs} onLogClick={handleLogClick} userProfile={user} onShowPremium={() => setView("premium")} isPremium={mainIsPremium} />}
+        {view === "add" && <AddLogView onSave={addLog} onCancel={() => setView("dashboard")} onShowPremium={() => setView("premium")} isPremium={mainIsPremium} />}
         {view === "messages" && <MessagesView user={user} />}
         {view === "board" && <BoardView />}
         {view === "safety" && <SafetyView />}
-        {view === "export" && <ExportView logs={logs} userProfile={user} onShowPremium={() => setView("premium")} />}
+        {view === "export" && <ExportView logs={logs} userProfile={user} onShowPremium={() => setView("premium")} isPremium={mainIsPremium} />}
         {view === "diagnosis" && <CompensationDiagnosisView logs={logs} onClose={() => setView("dashboard")} onShowPremium={() => setView("premium")} />}
         {view === "lifeSupport" && <LifeSupportView onClose={() => setView("dashboard")} />}
         {view === "premium" && <PremiumPlanView user={user} onClose={() => setView("dashboard")} />}
@@ -6938,7 +7029,7 @@ export default function RikoLogApp() {
     };
   }, []);
 
-  const handleLogin = (user) => {
+  const handleLogin = async (user) => {
     try {
       console.log("handleLogin呼び出し:", user ? "ユーザー情報あり" : "ユーザー情報なし");
       if (!user) {
@@ -6953,6 +7044,29 @@ export default function RikoLogApp() {
       });
       setError(null);
       console.log("setCurrentUser呼び出し完了");
+      
+      // プレミアム状態をデータベースから取得して更新
+      try {
+        const isPremiumUser = await checkPremiumStatusAsync(user.id);
+        // メインコンポーネントのisPremium状態を更新（後で実装）
+        // ここではlocalStorageも更新
+        if (isPremiumUser) {
+          const subscription = await getPremiumSubscription(user.id);
+          if (subscription) {
+            const premiumData = {
+              subscribedAt: subscription.start_date,
+              expiresAt: subscription.end_date,
+              planPrice: 450,
+              status: 'active'
+            };
+            localStorage.setItem('riko_premium', JSON.stringify(premiumData));
+          }
+        } else {
+          localStorage.removeItem('riko_premium');
+        }
+      } catch (premiumError) {
+        console.warn('プレミアム状態の取得エラー:', premiumError);
+      }
       
       // 状態更新を確実にするため、少し待ってから確認
       setTimeout(() => {
@@ -6973,12 +7087,51 @@ export default function RikoLogApp() {
     }
   };
 
+  // プレミアム状態の管理
+  const [isPremium, setIsPremium] = useState(false);
+  
+  // currentUserが変更された時にプレミアム状態を更新
+  useEffect(() => {
+    const updatePremiumStatus = async () => {
+      if (!currentUser?.id) {
+        setIsPremium(false);
+        return;
+      }
+      
+      try {
+        const premiumStatus = await checkPremiumStatusAsync(currentUser.id);
+        setIsPremium(premiumStatus);
+        
+        // localStorageも更新
+        if (premiumStatus) {
+          const subscription = await getPremiumSubscription(currentUser.id);
+          if (subscription) {
+            const premiumData = {
+              subscribedAt: subscription.start_date,
+              expiresAt: subscription.end_date,
+              planPrice: 450,
+              status: 'active'
+            };
+            localStorage.setItem('riko_premium', JSON.stringify(premiumData));
+          }
+        } else {
+          localStorage.removeItem('riko_premium');
+        }
+      } catch (error) {
+        console.warn('プレミアム状態の取得エラー:', error);
+        setIsPremium(false);
+      }
+    };
+    
+    updatePremiumStatus();
+  }, [currentUser?.id]);
+
   // デフォルトで電卓画面を表示（セッション確認はバックグラウンドで実行）
   // ローディング中でも電卓画面を表示（セッション確認が完了するまで）
   try {
     // ローディング中は電卓画面を表示（セッション確認中でも電卓画面を表示）
     if (!isUnlocked) {
-      return <CalculatorMode onUnlock={() => setIsUnlocked(true)} />;
+      return <CalculatorMode onUnlock={() => setIsUnlocked(true)} user={currentUser} />;
     }
 
     // エラー表示（ロック解除後、エラーがある場合のみ）
@@ -7008,7 +7161,7 @@ export default function RikoLogApp() {
     if (isLoading) {
       // セッション確認中は、既にログイン済みの場合はメインアプリを表示、未ログインの場合はログイン画面を表示
       if (currentUser) {
-        return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} />;
+        return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} isPremium={isPremium} />;
       }
       return <AuthScreen onLogin={handleLogin} />;
     }
@@ -7017,7 +7170,7 @@ export default function RikoLogApp() {
       return <AuthScreen onLogin={handleLogin} />;
     }
 
-    return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} />;
+    return <MainApp onLock={() => setIsUnlocked(false)} user={currentUser} onLogout={handleLogout} isPremium={isPremium} />;
   } catch (error) {
     console.error("アプリのレンダリングエラー:", error);
     return (
