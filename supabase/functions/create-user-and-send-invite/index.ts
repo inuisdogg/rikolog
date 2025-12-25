@@ -51,6 +51,12 @@ serve(async (req) => {
 
     const { email, purpose, appUrl, password: providedPassword, deviceType, deviceInfo } = requestData
 
+    // デバイス情報をログに出力（デバッグ用）
+    console.log('デバイス情報を受信:', {
+      deviceType,
+      deviceInfo: typeof deviceInfo === 'object' ? JSON.stringify(deviceInfo) : deviceInfo
+    })
+
     if (!email) {
       return new Response(
         JSON.stringify({ error: 'メールアドレスが必要です' }),
@@ -224,6 +230,21 @@ serve(async (req) => {
 
       // 新規ユーザーの場合のみ、usersテーブルとpremium_subscriptionsテーブルに保存
       if (isNewUser && userId) {
+        // デバイス情報をJSONB形式で準備（オブジェクトの場合はそのまま、文字列の場合はパース）
+        let deviceInfoJson: any = null
+        if (deviceInfo) {
+          if (typeof deviceInfo === 'string') {
+            try {
+              deviceInfoJson = JSON.parse(deviceInfo)
+            } catch (e) {
+              console.error('deviceInfoのパースエラー:', e)
+              deviceInfoJson = { raw: deviceInfo }
+            }
+          } else if (typeof deviceInfo === 'object') {
+            deviceInfoJson = deviceInfo
+          }
+        }
+
         // usersテーブルにユーザー情報を保存
         const { error: userInsertError } = await supabaseAdmin
           .from('users')
@@ -233,12 +254,21 @@ serve(async (req) => {
             reason: purpose || 'その他',
             registered_at: new Date().toISOString(),
             device_type: deviceType || null,
-            device_info: deviceInfo || null,
+            device_info: deviceInfoJson || null,
           })
 
         if (userInsertError) {
           console.error('usersテーブルへの保存エラー:', userInsertError)
+          console.error('保存しようとしたデータ:', {
+            device_type: deviceType,
+            device_info: deviceInfoJson
+          })
           // エラーをログに記録するが、処理は続行
+        } else {
+          console.log('デバイス情報を正常に保存:', {
+            device_type: deviceType,
+            device_info: deviceInfoJson
+          })
         }
 
         // premium_subscriptionsテーブルに無料プランを設定

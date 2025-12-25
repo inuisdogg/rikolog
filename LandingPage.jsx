@@ -110,6 +110,13 @@ export default function LandingPage() {
       // デバイス情報を取得
       const deviceType = getDeviceType();
       const deviceInfo = getDeviceInfo();
+      
+      // デバッグ用ログ（本番環境では削除可能）
+      console.log('送信するデバイス情報:', {
+        deviceType,
+        deviceInfo
+      });
+      
       const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
         body: { 
           email: email,
