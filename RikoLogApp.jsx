@@ -6943,6 +6943,43 @@ export default function RikoLogApp() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false); // デフォルトでfalseにして、最初から電卓画面を表示
 
+  // /appページではmanifestを確実に設定（ホーム画面追加時に/appから起動するように）
+  useEffect(() => {
+    // 既存のmanifestリンクを確認
+    let manifestLink = document.getElementById('app-manifest');
+    
+    // manifestリンクが存在しない場合は作成
+    if (!manifestLink) {
+      manifestLink = document.createElement('link');
+      manifestLink.id = 'app-manifest';
+      manifestLink.rel = 'manifest';
+      document.head.appendChild(manifestLink);
+    }
+    
+    // calculator.webmanifestを確実に設定
+    const v = Date.now();
+    manifestLink.setAttribute('href', `/manifests/calculator.webmanifest?v=${v}`);
+    
+    // iOS用のmetaタグも確実に設定
+    let appleMeta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+    if (!appleMeta) {
+      appleMeta = document.createElement('meta');
+      appleMeta.name = 'apple-mobile-web-app-capable';
+      document.head.appendChild(appleMeta);
+    }
+    appleMeta.content = 'yes';
+    
+    // apple-mobile-web-app-titleも設定
+    let appleTitle = document.getElementById('app-apple-title');
+    if (!appleTitle) {
+      appleTitle = document.createElement('meta');
+      appleTitle.id = 'app-apple-title';
+      appleTitle.name = 'apple-mobile-web-app-title';
+      document.head.appendChild(appleTitle);
+    }
+    appleTitle.setAttribute('content', '電卓');
+  }, []);
+
   // 認証状態の監視
   useEffect(() => {
     let timeoutId;

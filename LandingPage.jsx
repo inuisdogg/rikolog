@@ -47,32 +47,22 @@ export default function LandingPage() {
   useEffect(() => {
     document.title = 'リコログ';
     
-    // manifestを/appのものに変更（ホーム画面追加時に/appから起動するように）
-    // 既存のmanifestリンクを削除
-    const existingManifest = document.getElementById('app-manifest');
-    if (existingManifest) {
-      existingManifest.remove();
-    }
-    
-    // 既存のmanifestリンク（rel="manifest"）を全て削除
+    // LPページではmanifestを完全に削除（ホーム画面追加時に現在のURLが使われないように）
+    // 既存のmanifestリンクを全て削除
     const allManifests = document.querySelectorAll('link[rel="manifest"]');
     allManifests.forEach(link => link.remove());
     
-    // 新しいmanifestリンクを追加（絶対URLで確実に/appから起動するように）
-    const manifestLink = document.createElement('link');
-    manifestLink.id = 'app-manifest';
-    manifestLink.rel = 'manifest';
-    manifestLink.href = '/manifests/calculator.webmanifest';
-    document.head.appendChild(manifestLink);
-    
-    // iOS用のmetaタグも設定（ホーム画面追加時の起動URLを/appに）
-    let appleMeta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
-    if (!appleMeta) {
-      appleMeta = document.createElement('meta');
-      appleMeta.name = 'apple-mobile-web-app-capable';
-      document.head.appendChild(appleMeta);
+    // iOS用のmetaタグも削除（LPからはPWAとして追加させない）
+    const appleMeta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+    if (appleMeta) {
+      appleMeta.remove();
     }
-    appleMeta.content = 'yes';
+    
+    // apple-mobile-web-app-titleも削除
+    const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (appleTitle) {
+      appleTitle.remove();
+    }
   }, []);
 
   // 利用目的の選択肢

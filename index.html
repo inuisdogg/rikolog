@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <!-- PWA偽装（JSで差し替え） -->
     <!-- iOSはアイコンを強くキャッシュするため、まず固定のバージョン付きURLを指定（JSでも差し替えます） -->
+    <!-- manifestは/appページでのみ設定（LPページでは削除される） -->
     <link id="app-favicon" rel="icon" type="image/png" href="/disguises/calculator/icon-192.png?v=1" />
     <link id="app-apple-touch-icon" rel="apple-touch-icon" href="/disguises/calculator/icon-192.png?v=1" />
-    <link id="app-manifest" rel="manifest" href="/manifests/calculator.webmanifest?v=1" />
 
     <meta
       name="viewport"

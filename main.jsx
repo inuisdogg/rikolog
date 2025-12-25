@@ -75,9 +75,23 @@ function applyDisguiseToDocument(disguise) {
 // ============================================================================
 
 // 初回レンダリング前に偽装設定を適用（ホーム画面追加時の反映率を上げるため）
+// ただし、LPページ（/）ではmanifestを設定しない（LPからはPWAとして追加させない）
 try {
-  const saved = safeParseJSON(localStorage.getItem(DISGUISE_STORAGE_KEY));
-  applyDisguiseToDocument(saved || DEFAULT_DISGUISE);
+  const currentPath = window.location.pathname;
+  // /appページまたは/app/*の場合のみmanifestを設定
+  if (currentPath.startsWith('/app')) {
+    const saved = safeParseJSON(localStorage.getItem(DISGUISE_STORAGE_KEY));
+    applyDisguiseToDocument(saved || DEFAULT_DISGUISE);
+  } else {
+    // LPページではmanifestを削除
+    const manifestLink = document.getElementById('app-manifest');
+    if (manifestLink) {
+      manifestLink.remove();
+    }
+    // 既存のmanifestリンクを全て削除
+    const allManifests = document.querySelectorAll('link[rel="manifest"]');
+    allManifests.forEach(link => link.remove());
+  }
 } catch {
   // プライベートモード等でlocalStorageが使えない場合は無視
 }
