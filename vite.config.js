@@ -16,4 +16,24 @@ export default defineConfig({
   },
   publicDir: 'public',
   assetsInclude: ['**/*.TTF', '**/*.ttf'],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Reactコア
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // PDF生成（大きいライブラリ）
+          'vendor-pdf': ['@react-pdf/renderer', 'jspdf', 'html2canvas'],
+          // Supabase
+          'vendor-supabase': ['@supabase/supabase-js'],
+          // Stripe
+          'vendor-stripe': ['@stripe/stripe-js'],
+          // アイコン
+          'vendor-icons': ['lucide-react'],
+        },
+      },
+    },
+    // チャンクサイズ警告のしきい値を調整
+    chunkSizeWarningLimit: 600,
+  },
 });

@@ -100,13 +100,7 @@ export default function LandingPage() {
       // デバイス情報を取得
       const deviceType = getDeviceType();
       const deviceInfo = getDeviceInfo();
-      
-      // デバッグ用ログ（本番環境では削除可能）
-      console.log('送信するデバイス情報:', {
-        deviceType,
-        deviceInfo
-      });
-      
+
       const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user-and-send-invite', {
         body: { 
           email: email,
@@ -118,8 +112,6 @@ export default function LandingPage() {
       });
 
       if (functionError) {
-        console.error('ユーザー作成エラー:', functionError);
-        
         // エラーメッセージを詳細に表示
         let errorMessage = '登録に失敗しました。';
         
@@ -175,15 +167,11 @@ export default function LandingPage() {
       setIsSuccess(true);
       // 自動的に閉じない（ユーザーが手動で閉じる）
     } catch (err) {
-      console.error('メールアドレス保存エラー:', err);
-      console.error('エラー詳細:', JSON.stringify(err, null, 2));
-      
       // エラーメッセージを詳細に表示
       let errorMessage = '登録に失敗しました。';
-      
+
       // Supabaseエラーの場合
       if (err.code) {
-        console.error('Supabaseエラーコード:', err.code);
         if (err.code === '42P01') {
           errorMessage = 'データベースのテーブルが存在しません。管理者にお問い合わせください。';
         } else if (err.code === '42501') {

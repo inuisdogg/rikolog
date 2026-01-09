@@ -2,73 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-
-// ============================================================================
-// PWA偽装設定（アイコン/名称の動的切替）
-// ============================================================================
-// localStorage の選択に応じて、manifest / favicon / apple-touch-icon / title を差し替える
-// 注意: インストール済み後のアイコン/名称は変更できないため、削除→再追加が必要
-
-const DISGUISE_STORAGE_KEY = 'riko_disguise';
-const DEFAULT_DISGUISE = { id: 'calculator', title: '電卓' };
-
-/**
- * JSON文字列を安全にパースする
- * @param {string} value - パースするJSON文字列
- * @returns {object|null} パース結果、失敗時はnull
- */
-function safeParseJSON(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * ドキュメントに偽装設定を適用する
- * @param {object} disguise - 偽装設定オブジェクト { id, title }
- */
-function applyDisguiseToDocument(disguise) {
-  if (!disguise?.id) return;
-  
-  const id = disguise.id;
-  const title = disguise.title || DEFAULT_DISGUISE.title;
-  const v = Date.now();
-
-  // Manifestの更新
-  const manifestLink = document.getElementById('app-manifest');
-  if (manifestLink) {
-    manifestLink.setAttribute('href', `/manifests/${id}.webmanifest?v=${v}`);
-  }
-
-  // Apple Touch Iconの更新
-  const appleTouch = document.getElementById('app-apple-touch-icon');
-  if (appleTouch) {
-    appleTouch.setAttribute('href', `/disguises/${id}/icon-192.png?v=${v}`);
-  }
-
-  // Faviconの更新
-  const favicon = document.getElementById('app-favicon');
-  if (favicon) {
-    favicon.setAttribute('href', `/disguises/${id}/icon-192.png?v=${v}`);
-  }
-
-  // Apple Web App Titleの更新
-  const appleTitle = document.getElementById('app-apple-title');
-  if (appleTitle) {
-    appleTitle.setAttribute('content', title);
-  }
-
-  // ドキュメントタイトルの更新
-  document.title = title;
-
-  // メタディスクリプションの更新
-  const desc = document.getElementById('app-description');
-  if (desc) {
-    desc.setAttribute('content', title);
-  }
-}
+import {
+  DISGUISE_STORAGE_KEY,
+  DEFAULT_DISGUISE,
+  safeParseJSON,
+  applyDisguiseToDocument
+} from './src/utils/disguise.js';
 
 // ============================================================================
 // 初期化処理
@@ -124,81 +63,16 @@ if ('serviceWorker' in navigator) {
   }
 }
 
-// ============================================================================
-// フォント読み込み確認（デバッグ用）
-// ============================================================================
-if (document.fonts && document.fonts.check) {
-  // フォントを明示的に読み込む（実際のフォント名を使用）
+// フォントを明示的に読み込む
+if (document.fonts) {
   const fontFace = new FontFace('AKACHANalphabet', 'url(/fonts/AKACHANa.TTF)');
-  
-  fontFace.load().then((loadedFont) => {
-    document.fonts.add(loadedFont);
-    console.log('✅ フォントを手動で読み込みました:', loadedFont.family);
-    
-    // フォントが読み込まれたか確認（実際のフォント名で確認）
-    // 注意: check()はフォントが利用可能かどうかを確認するが、実際の適用はCSSに依存
-    const isLoaded = document.fonts.check('16px AKACHANalphabet');
-    console.log('AKACHANフォント読み込み状態:', isLoaded ? '✅ 読み込み済み' : '⚠️ check()はfalseですが、フォントは読み込まれています');
-    
-    // 実際に要素に適用されているか確認
-    setTimeout(() => {
-      const testElement = document.createElement('span');
-      testElement.style.fontFamily = 'AKACHANalphabet, sans-serif';
-      testElement.style.fontSize = '16px';
-      testElement.textContent = 'リコログ';
-      document.body.appendChild(testElement);
-      
-      const computedStyle = window.getComputedStyle(testElement);
-      const appliedFont = computedStyle.fontFamily;
-      console.log('適用されたフォント:', appliedFont);
-      
-      // フォントが適用されているか確認
-      if (appliedFont.includes('AKACHANalphabet')) {
-        console.log('✅ フォントが正しく適用されています！');
-      } else {
-        console.warn('⚠️ フォントが適用されていません。CSSを確認してください。');
-      }
-      
-      document.body.removeChild(testElement);
-    }, 500);
-  }).catch((err) => {
-    console.error('❌ フォントの読み込みに失敗:', err);
-    console.error('エラー詳細:', err.message);
-    
-    // フォントファイルの存在確認
-    fetch('/fonts/AKACHANa.TTF')
-      .then(res => {
-        if (res.ok) {
-          console.log('✅ フォントファイルは存在します:', res.status);
-          console.log('Content-Type:', res.headers.get('content-type'));
-          return res.blob();
-        } else {
-          console.error('❌ フォントファイルが見つかりません:', res.status);
-        }
-      })
-      .then(blob => {
-        if (blob) {
-          console.log('フォントファイルサイズ:', blob.size, 'bytes');
-          console.log('フォントファイルタイプ:', blob.type);
-        }
-      })
-      .catch(err => console.error('❌ フォントファイルの取得に失敗:', err));
-  });
-  
-  // フォントが読み込まれるまで待つ（フォールバック）
-  document.fonts.ready.then(() => {
-    setTimeout(() => {
-      // CSSの@font-faceで定義されたフォントを確認
-      const isLoaded = document.fonts.check('16px AKACHANalphabet');
-      if (isLoaded) {
-        console.log('✅ CSSの@font-faceで定義されたフォントが利用可能です: AKACHANalphabet');
-      } else {
-        // フォントは手動で読み込まれているので、CSSの定義は問題ない可能性が高い
-        console.log('ℹ️ document.fonts.check()はfalseですが、フォントは手動で読み込まれています。');
-        console.log('実際の表示を確認してください。フォントが表示されていれば問題ありません。');
-      }
-    }, 1000);
-  });
+  fontFace.load()
+    .then((loadedFont) => {
+      document.fonts.add(loadedFont);
+    })
+    .catch(() => {
+      // フォント読み込み失敗時はフォールバックフォントを使用
+    });
 }
 
 // ============================================================================

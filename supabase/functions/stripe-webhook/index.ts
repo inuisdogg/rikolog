@@ -7,14 +7,92 @@ const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 
-// Stripeの署名検証（簡易版 - 本番環境では適切な検証が必要）
+/**
+ * Stripe Webhook署名を検証する
+ * @see https://stripe.com/docs/webhooks/signatures
+ */
 async function verifyStripeSignature(body: string, signature: string | null): Promise<boolean> {
   if (!STRIPE_WEBHOOK_SECRET || !signature) {
+    console.error('署名検証エラー: Webhook secretまたは署名が未設定')
     return false
   }
-  // 実際の実装では、Stripeの署名検証ロジックを使用
-  // ここでは簡易的に実装
-  return true
+
+  try {
+    // Stripe署名ヘッダーをパース (形式: t=timestamp,v1=signature,v1=signature...)
+    const elements = signature.split(',')
+    const signatureMap: Record<string, string[]> = {}
+
+    for (const element of elements) {
+      const [key, value] = element.split('=')
+      if (!signatureMap[key]) {
+        signatureMap[key] = []
+      }
+      signatureMap[key].push(value)
+    }
+
+    const timestamp = signatureMap['t']?.[0]
+    const signatures = signatureMap['v1'] || []
+
+    if (!timestamp || signatures.length === 0) {
+      console.error('署名検証エラー: 無効な署名フォーマット')
+      return false
+    }
+
+    // タイムスタンプの検証（5分以内）
+    const timestampNum = parseInt(timestamp, 10)
+    const currentTime = Math.floor(Date.now() / 1000)
+    const tolerance = 300 // 5分
+
+    if (Math.abs(currentTime - timestampNum) > tolerance) {
+      console.error('署名検証エラー: タイムスタンプが古すぎます')
+      return false
+    }
+
+    // 署名の検証
+    // signed_payload = timestamp + '.' + payload
+    const signedPayload = `${timestamp}.${body}`
+
+    // HMAC-SHA256で期待される署名を計算
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(STRIPE_WEBHOOK_SECRET),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    )
+
+    const signatureBuffer = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(signedPayload)
+    )
+
+    // バイト配列を16進数文字列に変換
+    const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+
+    // 署名を比較（タイミング攻撃を防ぐため、全ての署名を比較）
+    const isValid = signatures.some(sig => {
+      if (sig.length !== expectedSignature.length) return false
+      // 定数時間比較
+      let result = 0
+      for (let i = 0; i < sig.length; i++) {
+        result |= sig.charCodeAt(i) ^ expectedSignature.charCodeAt(i)
+      }
+      return result === 0
+    })
+
+    if (!isValid) {
+      console.error('署名検証エラー: 署名が一致しません')
+    }
+
+    return isValid
+  } catch (error) {
+    console.error('署名検証エラー:', error)
+    return false
+  }
 }
 
 serve(async (req) => {
@@ -153,5 +231,9 @@ serve(async (req) => {
     )
   }
 })
+
+
+
+
 
 

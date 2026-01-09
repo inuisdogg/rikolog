@@ -6,13 +6,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// デバッグ用ログ（本番環境では削除推奨）
-console.log('Supabase設定確認:', {
-  url: supabaseUrl ? '設定済み' : '未設定',
-  key: supabaseAnonKey ? '設定済み' : '未設定',
-  urlPreview: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : null,
-});
-
 if (!supabaseUrl || !supabaseAnonKey) {
   const errorMsg = 'Missing Supabase environment variables. Please check your .env file.';
   console.error(errorMsg, {
@@ -38,8 +31,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
 });
-
-console.log('Supabaseクライアント初期化完了');
 
 export default supabase;
 

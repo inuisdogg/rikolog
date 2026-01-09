@@ -8,6 +8,20 @@ import { getUser, createUser, getCurrentUser, updateUser } from './db/users.js';
 import { getUserLogs, createLog, updateLog as updateLogInDB } from './db/logs.js';
 import { isPremiumUser, getPremiumSubscription } from './db/premium.js';
 import { stripePromise, PREMIUM_PRICE_ID, SUPABASE_FUNCTIONS_URL } from './stripe.config.js';
+import {
+  DISGUISE_STORAGE_KEY,
+  DEFAULT_DISGUISE,
+  DISGUISE_PRESETS,
+  safeParseJSON,
+  tryRecoverJSONFromSubstring,
+  loadLocalStorageJSON,
+  getDisguisePreset,
+  readSavedDisguise,
+  saveDisguisePreset,
+  applyDisguiseToDocument,
+  isStandaloneMode
+} from './src/utils/disguise.js';
+import logger from './src/utils/logger.js';
 import { 
   ShieldAlert, 
   Plus, 
@@ -86,171 +100,6 @@ import {
 
 // --- アフィリエイト表示設定（将来的に表示する場合は true に変更） ---
 const SHOW_AFFILIATE_SECTIONS = false; // 弁護士相談、探偵相談、離婚後の生活支援の表示/非表示を制御
-
-// --- PWA偽装（ホーム画面追加時の名称/アイコン切替） ---
-const DISGUISE_STORAGE_KEY = 'riko_disguise';
-const DEFAULT_DISGUISE = { id: 'calculator', title: '電卓' };
-
-const DISGUISE_PRESETS = [
-  // 典型的なカモフラージュ
-  { id: 'calculator', title: '電卓', keywords: ['電卓', '計算', 'calculator'] },
-  { id: 'weather', title: '天気', keywords: ['天気', 'weather', '予報'] },
-  { id: 'calendar', title: 'カレンダー', keywords: ['カレンダー', '予定', 'calendar'] },
-  { id: 'clock', title: '時計', keywords: ['時計', 'clock', 'アラーム'] },
-  { id: 'time', title: 'タイマー', keywords: ['タイマー', 'timer'] },
-  { id: 'notes', title: 'メモ', keywords: ['メモ', 'ノート', 'notes'] },
-  { id: 'reminders', title: 'リマインダー', keywords: ['リマインダー', 'reminders', '予定'] },
-  { id: 'photos', title: '写真', keywords: ['写真', 'photos', 'アルバム'] },
-  { id: 'mail', title: 'メール', keywords: ['メール', 'mail'] },
-  { id: 'maps', title: 'マップ', keywords: ['マップ', 'maps', '地図'] },
-  { id: 'messages', title: 'メッセージ', keywords: ['メッセージ', 'messages'] },
-  { id: 'music', title: 'ミュージック', keywords: ['ミュージック', 'music'] },
-  { id: 'podcasts', title: 'Podcast', keywords: ['podcast', 'ポッドキャスト'] },
-  { id: 'tv', title: 'TV', keywords: ['tv', 'テレビ'] },
-  { id: 'books', title: 'ブック', keywords: ['ブック', 'books', '読書'] },
-  { id: 'stocks', title: '株価', keywords: ['株価', 'stocks'] },
-  { id: 'appstore', title: 'App Store', keywords: ['app store', 'ストア'] },
-  { id: 'facetime', title: 'FaceTime', keywords: ['facetime', '通話'] },
-
-  // 数を増やす（汎用・自然系）
-  { id: 'files', title: 'ファイル', keywords: ['ファイル', 'files', 'Finder'] },
-  { id: 'documents', title: '書類', keywords: ['書類', 'documents'] },
-  { id: 'downloads', title: 'ダウンロード', keywords: ['ダウンロード', 'downloads'] },
-  { id: 'desktop', title: 'デスクトップ', keywords: ['デスクトップ', 'desktop'] },
-  { id: 'favorites', title: 'お気に入り', keywords: ['お気に入り', 'favorites'] },
-  { id: 'airdrop', title: 'AirDrop', keywords: ['airdrop'] },
-  { id: 'bookmark', title: 'ブックマーク', keywords: ['ブックマーク', 'bookmark'] },
-  { id: 'network', title: 'ネットワーク', keywords: ['ネットワーク', 'network'] },
-  { id: 'folder', title: 'フォルダ', keywords: ['フォルダ', 'folder'] },
-  { id: 'app', title: 'アプリ', keywords: ['アプリ', 'app'] },
-  { id: 'settings', title: '設定', keywords: ['設定', 'settings'] },
-  { id: 'accounts', title: 'アカウント', keywords: ['アカウント', 'accounts'] },
-  { id: 'alert', title: 'お知らせ', keywords: ['お知らせ', 'alert', '通知'] },
-  { id: 'trash', title: 'ゴミ箱', keywords: ['ゴミ箱', 'trash'] },
-  { id: 'help', title: 'ヘルプ', keywords: ['ヘルプ', 'help'] },
-  { id: 'browser', title: 'ブラウザ', keywords: ['ブラウザ', 'browser', 'URL'] },
-  { id: 'security', title: 'セキュリティ', keywords: ['セキュリティ', 'security'] },
-];
-
-function safeParseJSON(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function tryRecoverJSONFromSubstring(value, expected) {
-  const s = typeof value === 'string' ? value : '';
-  if (!s) return null;
-  const open = expected === 'array' ? '[' : '{';
-  const close = expected === 'array' ? ']' : '}';
-  const start = s.indexOf(open);
-  const end = s.lastIndexOf(close);
-  if (start < 0 || end < 0 || end <= start) return null;
-  const candidate = s.slice(start, end + 1);
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    return null;
-  }
-}
-
-function loadLocalStorageJSON(key, { expected, fallback }) {
-  // expected: 'array' | 'object'
-  // 1) 通常パース
-  const raw = (() => {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  })();
-  if (!raw) return { value: fallback, recovered: false, raw: null };
-
-  const direct = safeParseJSON(raw);
-  const okDirect =
-    expected === 'array' ? Array.isArray(direct) : direct && typeof direct === 'object' && !Array.isArray(direct);
-  if (okDirect) return { value: direct, recovered: false, raw };
-
-  // 2) 破損JSONの“部分復旧”（クラッシュ等で末尾にゴミが混ざるケース）
-  const recovered = tryRecoverJSONFromSubstring(raw, expected);
-  const okRecovered =
-    expected === 'array'
-      ? Array.isArray(recovered)
-      : recovered && typeof recovered === 'object' && !Array.isArray(recovered);
-  if (okRecovered) {
-    try {
-      localStorage.setItem(key, JSON.stringify(recovered));
-    } catch {
-      // ignore
-    }
-    return { value: recovered, recovered: true, raw };
-  }
-
-  // 3) 復旧不能ならバックアップ退避して初期化（アプリが落ち続けるのを防ぐ）
-  try {
-    localStorage.setItem(`${key}_corrupt_backup`, raw);
-    localStorage.removeItem(key);
-  } catch {
-    // ignore
-  }
-  return { value: fallback, recovered: false, raw };
-}
-
-function getDisguisePreset(id) {
-  return DISGUISE_PRESETS.find(p => p.id === id) || DEFAULT_DISGUISE;
-}
-
-function readSavedDisguise() {
-  try {
-    const saved = safeParseJSON(localStorage.getItem(DISGUISE_STORAGE_KEY));
-    if (saved?.id) return getDisguisePreset(saved.id);
-  } catch {
-    // ignore
-  }
-  return DEFAULT_DISGUISE;
-}
-
-function saveDisguisePreset(preset) {
-  try {
-    localStorage.setItem(DISGUISE_STORAGE_KEY, JSON.stringify({ id: preset.id, title: preset.title }));
-  } catch {
-    // ignore
-  }
-}
-
-function applyDisguiseToDocument(preset) {
-  if (!preset?.id) return;
-  const v = Date.now();
-  const manifestLink = document.getElementById('app-manifest');
-  if (manifestLink) manifestLink.setAttribute('href', `/manifests/${preset.id}.webmanifest?v=${v}`);
-
-  const appleTouch = document.getElementById('app-apple-touch-icon');
-  if (appleTouch) appleTouch.setAttribute('href', `/disguises/${preset.id}/icon-192.png?v=${v}`);
-
-  const favicon = document.getElementById('app-favicon');
-  if (favicon) favicon.setAttribute('href', `/disguises/${preset.id}/icon-192.png?v=${v}`);
-
-  const appleTitle = document.getElementById('app-apple-title');
-  if (appleTitle) appleTitle.setAttribute('content', preset.title);
-
-  document.title = preset.title;
-
-  const desc = document.getElementById('app-description');
-  if (desc) desc.setAttribute('content', preset.title);
-}
-
-function isStandaloneMode() {
-  try {
-    return (
-      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-      window.navigator.standalone === true
-    );
-  } catch {
-    return false;
-  }
-}
 
 // --- プレミアムプランチェック ---
 // プレミアム状態をチェック（非同期版）
@@ -337,7 +186,7 @@ const CalculatorMode = ({ onUnlock, user }) => {
         // 画面をリロードして新しいパスコードを反映
         window.location.reload();
       } catch (error) {
-        console.error('パスコードリセットエラー:', error);
+        logger.error('パスコードリセットエラー:', error);
         alert('パスコードのリセットに失敗しました。もう一度お試しください。');
         setIsResetting(false);
       }
@@ -363,6 +212,57 @@ const CalculatorMode = ({ onUnlock, user }) => {
     };
   }, []);
 
+  // 安全な数式評価関数（eval/new Functionを使わない）
+  const safeEvaluate = (expression) => {
+    // 許可する文字のみをチェック（数字、演算子、小数点のみ）
+    if (!/^[\d+\-*/.\s()]+$/.test(expression)) {
+      throw new Error('Invalid expression');
+    }
+
+    // トークン化
+    const tokens = [];
+    let numBuffer = '';
+
+    for (const char of expression) {
+      if (/\d|\./.test(char)) {
+        numBuffer += char;
+      } else if (['+', '-', '*', '/'].includes(char)) {
+        if (numBuffer) {
+          tokens.push(parseFloat(numBuffer));
+          numBuffer = '';
+        }
+        tokens.push(char);
+      }
+    }
+    if (numBuffer) {
+      tokens.push(parseFloat(numBuffer));
+    }
+
+    // 乗算・除算を先に処理
+    let i = 0;
+    while (i < tokens.length) {
+      if (tokens[i] === '*' || tokens[i] === '/') {
+        const left = tokens[i - 1];
+        const right = tokens[i + 1];
+        const result = tokens[i] === '*' ? left * right : left / right;
+        tokens.splice(i - 1, 3, result);
+      } else {
+        i++;
+      }
+    }
+
+    // 加算・減算を処理
+    let result = tokens[0];
+    for (let j = 1; j < tokens.length; j += 2) {
+      const op = tokens[j];
+      const num = tokens[j + 1];
+      if (op === '+') result += num;
+      else if (op === '-') result -= num;
+    }
+
+    return result;
+  };
+
   const handlePress = (val) => {
     if (val === "C") {
       setDisplay("0");
@@ -371,9 +271,12 @@ const CalculatorMode = ({ onUnlock, user }) => {
         onUnlock();
       } else {
         try {
-          // eslint-disable-next-line no-new-func
-          const result = new Function('return ' + display)();
-          setDisplay(result.toString());
+          const result = safeEvaluate(display);
+          if (isNaN(result) || !isFinite(result)) {
+            setDisplay("Error");
+          } else {
+            setDisplay(result.toString());
+          }
         } catch {
           setDisplay("Error");
         }
@@ -500,25 +403,25 @@ const AuthScreen = ({ onLogin }) => {
   const isWebAuthnAvailable = () => {
     // 基本的なチェック
     if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-      console.log('WebAuthnチェック: windowまたはnavigatorが未定義');
+      logger.log('WebAuthnチェック: windowまたはnavigatorが未定義');
       return false;
     }
 
     // PublicKeyCredentialの存在チェック
     if (!('PublicKeyCredential' in window)) {
-      console.log('WebAuthnチェック: PublicKeyCredentialが存在しません');
+      logger.log('WebAuthnチェック: PublicKeyCredentialが存在しません');
       return false;
     }
 
     // navigator.credentialsの存在チェック
     if (!('credentials' in navigator)) {
-      console.log('WebAuthnチェック: navigator.credentialsが存在しません');
+      logger.log('WebAuthnチェック: navigator.credentialsが存在しません');
       return false;
     }
 
     // create/getメソッドの存在チェック
     if (!('create' in navigator.credentials) || !('get' in navigator.credentials)) {
-      console.log('WebAuthnチェック: credentials.createまたはgetが存在しません');
+      logger.log('WebAuthnチェック: credentials.createまたはgetが存在しません');
       return false;
     }
 
@@ -535,7 +438,7 @@ const AuthScreen = ({ onLogin }) => {
                                window.location.hostname === '127.0.0.1';
       
       if (!isSecureContext) {
-        console.log('WebAuthnチェック: iOSではHTTPS環境が必要です', {
+        logger.log('WebAuthnチェック: iOSではHTTPS環境が必要です', {
           protocol: window.location.protocol,
           hostname: window.location.hostname
         });
@@ -543,7 +446,7 @@ const AuthScreen = ({ onLogin }) => {
       }
     }
 
-    console.log('WebAuthnチェック: 利用可能です', {
+    logger.log('WebAuthnチェック: 利用可能です', {
       isIOS,
       isSecureContext: window.isSecureContext,
       protocol: window.location.protocol,
@@ -608,7 +511,7 @@ const AuthScreen = ({ onLogin }) => {
       localStorage.setItem(`webauthn_credential_${userId}`, JSON.stringify(credentialData));
       return credentialData;
     } catch (error) {
-      console.error("WebAuthn登録エラー:", error);
+      logger.error("WebAuthn登録エラー:", error);
       throw error;
     }
   };
@@ -655,7 +558,7 @@ const AuthScreen = ({ onLogin }) => {
         });
 
         if (signUpError) {
-          console.error('ユーザー登録エラー:', signUpError);
+          logger.error('ユーザー登録エラー:', signUpError);
           
           // エラーメッセージを日本語に変換
           const errorMsg = signUpError.message || '';
@@ -675,14 +578,14 @@ const AuthScreen = ({ onLogin }) => {
         
         // セッションがない場合（メール確認が必要な場合）、ログインを試みる
         if (!session) {
-          console.log('セッションがないため、ログインを試みます...');
+          logger.log('セッションがないため、ログインを試みます...');
           const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
             email: trimmedEmail,
             password: trimmedPassword,
           });
           
           if (loginError) {
-            console.error('自動ログインエラー:', loginError);
+            logger.error('自動ログインエラー:', loginError);
             throw new Error('登録は完了しましたが、ログインに失敗しました。ログイン画面から再度ログインしてください。');
           }
           
@@ -702,8 +605,8 @@ const AuthScreen = ({ onLogin }) => {
             calculatorPasscode: '7777', // デフォルトパスコード
           });
         } catch (createError) {
-          console.error('usersテーブルへの保存エラー:', createError);
-          console.error('エラー詳細:', {
+          logger.error('usersテーブルへの保存エラー:', createError);
+          logger.error('エラー詳細:', {
             message: createError?.message,
             code: createError?.code,
             details: createError?.details,
@@ -723,11 +626,11 @@ const AuthScreen = ({ onLogin }) => {
             });
 
           if (premiumError) {
-            console.warn('premium_subscriptionsテーブルへの保存エラー:', premiumError);
+            logger.warn('premium_subscriptionsテーブルへの保存エラー:', premiumError);
             // エラーでも続行
           }
         } catch (premiumError) {
-          console.warn('premium_subscriptionsテーブルへの保存エラー:', premiumError);
+          logger.warn('premium_subscriptionsテーブルへの保存エラー:', premiumError);
           // エラーでも続行
         }
 
@@ -740,7 +643,7 @@ const AuthScreen = ({ onLogin }) => {
             appUrl: productionAppUrl
           }
         }).catch((emailError) => {
-          console.warn('登録完了メール送信エラー:', emailError);
+          logger.warn('登録完了メール送信エラー:', emailError);
           // メール送信エラーは無視して続行
         });
 
@@ -753,7 +656,7 @@ const AuthScreen = ({ onLogin }) => {
               expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             }));
           } catch (err) {
-            console.warn('remember_me保存エラー:', err);
+            logger.warn('remember_me保存エラー:', err);
           }
         } else {
           localStorage.removeItem('riko_remember_me');
@@ -775,8 +678,8 @@ const AuthScreen = ({ onLogin }) => {
             await new Promise(resolve => setTimeout(resolve, 300));
             userProfile = await getUser(authData.user.id);
           } catch (createError) {
-            console.error('ユーザー情報作成エラー:', createError);
-            console.error('エラー詳細:', {
+            logger.error('ユーザー情報作成エラー:', createError);
+            logger.error('エラー詳細:', {
               message: createError?.message,
               code: createError?.code,
               details: createError?.details,
@@ -799,7 +702,7 @@ const AuthScreen = ({ onLogin }) => {
           const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
           if (!existingCredential) {
             registerWebAuthn(authData.user.id, trimmedEmail).catch((err) => {
-              console.warn('WebAuthn登録エラー:', err);
+              logger.warn('WebAuthn登録エラー:', err);
             });
           }
         }
@@ -815,7 +718,7 @@ const AuthScreen = ({ onLogin }) => {
         });
 
         if (authError) {
-          console.error('ログインエラー:', authError);
+          logger.error('ログインエラー:', authError);
           
           // エラーメッセージを日本語に変換
           const errorMsg = authError.message || '';
@@ -843,7 +746,7 @@ const AuthScreen = ({ onLogin }) => {
               expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             }));
           } catch (err) {
-            console.warn('remember_me保存エラー:', err);
+            logger.warn('remember_me保存エラー:', err);
           }
         } else {
           localStorage.removeItem('riko_remember_me');
@@ -864,7 +767,7 @@ const AuthScreen = ({ onLogin }) => {
             await new Promise(resolve => setTimeout(resolve, 300));
             userProfile = await getUser(authData.user.id);
           } catch (createError) {
-            console.warn('ユーザー情報作成エラー:', createError);
+            logger.warn('ユーザー情報作成エラー:', createError);
             // 最小限のユーザー情報で続行
             userProfile = {
               id: authData.user.id,
@@ -881,7 +784,7 @@ const AuthScreen = ({ onLogin }) => {
           const existingCredential = localStorage.getItem(`webauthn_credential_${authData.user.id}`);
           if (!existingCredential) {
             registerWebAuthn(authData.user.id, trimmedEmail).catch((err) => {
-              console.warn('WebAuthn登録エラー（無視）:', err);
+              logger.warn('WebAuthn登録エラー（無視）:', err);
             });
           }
         }
@@ -891,7 +794,7 @@ const AuthScreen = ({ onLogin }) => {
         return;
       }
     } catch (error) {
-      console.error('認証エラー:', error);
+      logger.error('認証エラー:', error);
       setError(error.message || '認証処理中にエラーが発生しました。もう一度お試しください。');
     } finally {
       setIsLoading(false);
@@ -939,7 +842,7 @@ const AuthScreen = ({ onLogin }) => {
 
       return true;
     } catch (error) {
-      console.error("WebAuthn認証エラー:", error);
+      logger.error("WebAuthn認証エラー:", error);
       throw error;
     }
   };
@@ -971,13 +874,13 @@ const AuthScreen = ({ onLogin }) => {
       });
 
       if (resetError) {
-        console.error("パスワードリセットエラー:", resetError);
+        logger.error("パスワードリセットエラー:", resetError);
         throw resetError;
       }
 
       setResetEmailSent(true);
     } catch (error) {
-      console.error("パスワードリセットエラー:", error);
+      logger.error("パスワードリセットエラー:", error);
       let errorMessage = "パスワードリセットメールの送信に失敗しました。";
       
       if (error.message) {
@@ -1021,7 +924,7 @@ const AuthScreen = ({ onLogin }) => {
       });
 
       if (updateError) {
-        console.error("パスワード更新エラー:", updateError);
+        logger.error("パスワード更新エラー:", updateError);
         throw updateError;
       }
 
@@ -1031,7 +934,7 @@ const AuthScreen = ({ onLogin }) => {
       setError(null);
       alert("パスワードが正常に更新されました。新しいパスワードでログインしてください。");
     } catch (error) {
-      console.error("パスワード更新エラー:", error);
+      logger.error("パスワード更新エラー:", error);
       let errorMessage = "パスワードの更新に失敗しました。";
       
       if (error.message) {
@@ -1475,7 +1378,7 @@ const SafetyView = ({ user: propUser, onUserUpdate }) => {
                     setPasscode(''); // 入力欄をクリア
                     alert('✅ 電卓パスコードを変更しました。\n次回の電卓画面から新しいパスコードが有効になります。');
                   } catch (error) {
-                    console.error('パスコード変更エラー:', error);
+                    logger.error('パスコード変更エラー:', error);
                     // エラーの詳細を取得
                     let errorMessage = 'パスコードの変更に失敗しました';
                     if (error?.message) {
@@ -3937,7 +3840,7 @@ const MessagesView = ({ user }) => {
         throw new Error(data?.message || '送信に失敗しました');
       }
     } catch (error) {
-      console.error('お問い合わせ送信エラー:', error);
+      logger.error('お問い合わせ送信エラー:', error);
       setSendStatus('error');
       alert(error.message || 'お問い合わせの送信に失敗しました。もう一度お試しください。');
     } finally {
@@ -4470,6 +4373,21 @@ const LogDetailView = ({ log, onClose, onUpdate, isPremium: detailIsPremium }) =
     setNewComment('');
   };
 
+  // Xへ共有する関数
+  const handleShareToX = () => {
+    // プライバシー保護: 具体的な内容ではなく記録したことだけを共有
+    const text = `【記録完了】${log.date} ${log.category}のログを記録しました。
+
+離婚に向けた証拠を継続的に記録中です。
+#リコログ #離婚準備 #証拠記録`;
+
+    // Twitter Web Intent URLを作成
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+
+    // 新しいウィンドウで開く
+    window.open(twitterUrl, '_blank', 'width=550,height=420');
+  };
+
   return (
     <div 
       className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -4497,6 +4415,16 @@ const LogDetailView = ({ log, onClose, onUpdate, isPremium: detailIsPremium }) =
         <div className="p-3 sm:p-4 border-b flex items-center justify-between shrink-0 flex-shrink-0">
           <h2 className="text-base sm:text-lg font-bold text-slate-900">ログ詳細</h2>
           <div className="flex items-center gap-1 sm:gap-2">
+            {/* X共有ボタン */}
+            <button
+              onClick={handleShareToX}
+              className="p-1.5 sm:p-2 rounded-full active:bg-gray-100 text-gray-600 hover:text-black touch-manipulation"
+              title="Xで共有"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-[18px] sm:h-[18px] fill-current">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+            </button>
             {!isEditing ? (
               <button
                 onClick={handleEditStart}
@@ -5373,6 +5301,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, 
   const [content, setContent] = useState("");
   const [location, setLocation] = useState("");
   const [attachments, setAttachments] = useState([]);
+  const [shareToX, setShareToX] = useState(false); // X共有オプション
   // メインコンポーネントから渡されたisPremiumを使用（なければlocalStorageをチェック）
   const isPremium = addIsPremium !== undefined ? addIsPremium : checkPremiumStatus();
   
@@ -5512,13 +5441,13 @@ const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, 
         const accuracyText = accuracy ? `（GPS取得済・精度: ±${Math.round(accuracy)}m）` : '（GPS取得済）';
         setLocation(`${locationText}${accuracyText}`);
       } catch (geocodeError) {
-        console.error('逆ジオコーディングエラー:', geocodeError);
+        logger.error('逆ジオコーディングエラー:', geocodeError);
         // 逆ジオコーディングに失敗した場合は緯度経度を表示
         const accuracyText = accuracy ? `（GPS取得済・精度: ±${Math.round(accuracy)}m）` : '（GPS取得済）';
         setLocation(`緯度${latitude.toFixed(6)}, 経度${longitude.toFixed(6)}${accuracyText}`);
       }
     } catch (error) {
-      console.error('位置情報取得エラー:', error);
+      logger.error('位置情報取得エラー:', error);
       const PERMISSION_DENIED = 1;
       const POSITION_UNAVAILABLE = 2;
       const TIMEOUT = 3;
@@ -5609,6 +5538,25 @@ const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, 
     setAttachments(newAtt);
   };
 
+  // Xへ共有する関数
+  const shareToTwitter = (logData) => {
+    // プライバシー保護: 具体的な内容ではなく記録したことだけを共有
+    const dateStr = logData.date;
+    const categoryStr = logData.category;
+
+    // 共有テキスト（個人情報は含めない）
+    const text = `【記録完了】${dateStr} ${categoryStr}のログを記録しました。
+
+離婚に向けた証拠を継続的に記録中です。
+#リコログ #離婚準備 #証拠記録`;
+
+    // Twitter Web Intent URLを作成
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+
+    // 新しいウィンドウで開く
+    window.open(twitterUrl, '_blank', 'width=550,height=420');
+  };
+
   const handleSubmit = () => {
     const now = new Date();
     const trimmed = String(content || "").trim();
@@ -5629,7 +5577,7 @@ const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, 
           }
         : null;
 
-    onSave({
+    const logData = {
       date: now.toLocaleDateString(),
       time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       category,
@@ -5637,7 +5585,15 @@ const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, 
       content: finalContent,
       attachments,
       medical,
-    });
+    };
+
+    // ログを保存
+    onSave(logData);
+
+    // X共有オプションがオンの場合、共有画面を開く
+    if (shareToX) {
+      shareToTwitter(logData);
+    }
   };
 
   const categories = ["モラハラ", "暴力・DV", "不貞・浮気", "生活費未払い", "育児放棄", "通院・診断書", "その他"];
@@ -5904,9 +5860,37 @@ const AddLogView = ({ onSave, onCancel, onShowPremium, showGuide, onGuideClose, 
                     </div>
                 )}
 
+                {/* X共有オプション */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={shareToX}
+                      onChange={(e) => setShareToX(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
+                    />
+                    <div className="flex items-center gap-2">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-black">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      <span className="text-sm font-bold text-gray-700">保存後にXで共有する</span>
+                    </div>
+                  </label>
+                  <p className="text-[10px] text-gray-500 mt-2 ml-8">
+                    ※個人情報は共有されません（日付とカテゴリのみ）
+                  </p>
+                </div>
+
                 <div className="flex gap-3 pt-4">
                     <button onClick={onCancel} className="flex-1 py-3 text-gray-500 font-bold text-sm">キャンセル</button>
-                    <button onClick={handleSubmit} className="flex-1 bg-slate-900 text-white font-bold py-3 rounded shadow-lg">保存</button>
+                    <button onClick={handleSubmit} className="flex-1 bg-slate-900 text-white font-bold py-3 rounded shadow-lg flex items-center justify-center gap-2">
+                      保存
+                      {shareToX && (
+                        <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                      )}
+                    </button>
                 </div>
             </div>
         </div>
@@ -6105,8 +6089,8 @@ const PremiumPlanView = ({ user, onClose }) => {
     const canceled = urlParams.get('canceled');
 
     if (sessionId) {
-      // チェックアウト成功 - プレミアムステータスを更新
-      checkSubscriptionStatus();
+      // チェックアウト成功 - Stripeセッションを検証してプレミアム有効化
+      verifyCheckoutSession(sessionId);
       // URLからパラメータを削除
       window.history.replaceState({}, '', window.location.pathname);
     } else if (canceled) {
@@ -6116,9 +6100,57 @@ const PremiumPlanView = ({ user, onClose }) => {
     }
   }, []);
 
+  // Stripeチェックアウトセッションを検証してプレミアムを有効化
+  const verifyCheckoutSession = async (sessionId) => {
+    if (!user?.id) return;
+
+    setIsLoading(true);
+    try {
+      // verify-checkout-session Edge Functionを呼び出す
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/verify-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'セッション検証に失敗しました');
+      }
+
+      if (result.success) {
+        // プレミアム有効化成功
+        const newPremiumData = {
+          subscribedAt: result.subscription.startDate,
+          expiresAt: result.subscription.endDate,
+          planPrice: 450,
+          status: 'active'
+        };
+        localStorage.setItem('riko_premium', JSON.stringify(newPremiumData));
+        setPremiumData(newPremiumData);
+        setIsPremium(true);
+        alert('プレミアムプランへの登録が完了しました！\n全ての機能がご利用いただけます。');
+      } else {
+        // 支払いが完了していない場合
+        logger.warn('支払い未完了:', result);
+        alert(result.error || '決済が完了していません。もう一度お試しください。');
+      }
+    } catch (error) {
+      logger.error('セッション検証エラー:', error);
+      // Edge Functionが利用できない場合はフォールバック
+      await checkSubscriptionStatus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // データベースからサブスクリプション状態を確認（フォールバック用）
   const checkSubscriptionStatus = async () => {
     if (!user?.id) return;
-    
+
     try {
       const subscription = await getPremiumSubscription(user.id);
       if (subscription && subscription.status === 'active') {
@@ -6135,7 +6167,7 @@ const PremiumPlanView = ({ user, onClose }) => {
         alert('プレミアムプランへの登録が完了しました！');
       }
     } catch (error) {
-      console.error('サブスクリプション確認エラー:', error);
+      logger.error('サブスクリプション確認エラー:', error);
     }
   };
 
@@ -6146,7 +6178,7 @@ const PremiumPlanView = ({ user, onClose }) => {
     }
 
     // デバッグログ
-    console.log('Stripe設定確認:', {
+    logger.log('Stripe設定確認:', {
       stripePromise: !!stripePromise,
       PREMIUM_PRICE_ID,
       SUPABASE_FUNCTIONS_URL,
@@ -6155,7 +6187,7 @@ const PremiumPlanView = ({ user, onClose }) => {
 
     // Stripe公開キーが設定されていない場合はデモモード
     if (!stripePromise) {
-      console.warn('Stripe公開キーが設定されていません。デモモードで動作します。');
+      logger.warn('Stripe公開キーが設定されていません。デモモードで動作します。');
     const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 1);
     
@@ -6175,7 +6207,7 @@ const PremiumPlanView = ({ user, onClose }) => {
 
     // Edge FunctionのURLが設定されていない場合はデモモード
     if (!SUPABASE_FUNCTIONS_URL) {
-      console.warn('Supabase Edge FunctionのURLが設定されていません。デモモードで動作します。');
+      logger.warn('Supabase Edge FunctionのURLが設定されていません。デモモードで動作します。');
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 1);
       
@@ -6205,7 +6237,7 @@ const PremiumPlanView = ({ user, onClose }) => {
       const successUrl = `${window.location.origin}/app?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${window.location.origin}/app?canceled=true`;
 
-      console.log('チェックアウトセッション作成リクエスト:', {
+      logger.log('チェックアウトセッション作成リクエスト:', {
         url: `${SUPABASE_FUNCTIONS_URL}/create-checkout-session`,
         userId: user.id,
         priceId: PREMIUM_PRICE_ID,
@@ -6231,10 +6263,10 @@ const PremiumPlanView = ({ user, onClose }) => {
           }),
         });
       } catch (fetchError) {
-        console.error('ネットワークエラー:', fetchError);
+        logger.error('ネットワークエラー:', fetchError);
         // Edge Functionがデプロイされていない可能性 - デモモードにフォールバック
         if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
-          console.warn('Edge Functionに接続できません。デモモードで動作します。');
+          logger.warn('Edge Functionに接続できません。デモモードで動作します。');
           const expiresAt = new Date();
           expiresAt.setMonth(expiresAt.getMonth() + 1);
           
@@ -6264,7 +6296,7 @@ const PremiumPlanView = ({ user, onClose }) => {
         throw fetchError;
       }
 
-      console.log('レスポンスステータス:', response.status);
+      logger.log('レスポンスステータス:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -6274,11 +6306,11 @@ const PremiumPlanView = ({ user, onClose }) => {
         } catch {
           error = { error: errorText || 'チェックアウトセッションの作成に失敗しました' };
         }
-        console.error('エラーレスポンス:', error);
+        logger.error('エラーレスポンス:', error);
         
         // 404エラーの場合、Edge Functionがデプロイされていない可能性 - デモモードにフォールバック
         if (response.status === 404) {
-          console.warn('Edge Functionが見つかりません。デモモードで動作します。');
+          logger.warn('Edge Functionが見つかりません。デモモードで動作します。');
           const expiresAt = new Date();
           expiresAt.setMonth(expiresAt.getMonth() + 1);
           
@@ -6307,7 +6339,7 @@ const PremiumPlanView = ({ user, onClose }) => {
       }
 
       const result = await response.json();
-      console.log('チェックアウトセッション作成成功:', result);
+      logger.log('チェックアウトセッション作成成功:', result);
 
       const { sessionId, url } = result;
 
@@ -6332,7 +6364,7 @@ const PremiumPlanView = ({ user, onClose }) => {
         throw new Error('チェックアウトURLの取得に失敗しました');
       }
     } catch (error) {
-      console.error('決済エラー詳細:', error);
+      logger.error('決済エラー詳細:', error);
       const errorMessage = error.message || '決済処理中にエラーが発生しました';
       alert(`決済処理中にエラーが発生しました:\n\n${errorMessage}\n\n詳細はブラウザのコンソールを確認してください。`);
       setIsLoading(false);
@@ -6587,7 +6619,7 @@ const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium, onUserUpdat
         setLogs(convertedLogs);
         setError(null);
       } catch (err) {
-        console.error("ログの読み込みエラー:", err);
+        logger.error("ログの読み込みエラー:", err);
         setError("ログの読み込みに失敗しました");
         setLogs([]);
       } finally {
@@ -6650,7 +6682,7 @@ const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium, onUserUpdat
       setLogs(updatedLogs);
       setView("timeline");
     } catch (err) {
-      console.error("ログの保存エラー:", err);
+      logger.error("ログの保存エラー:", err);
       alert("ログの保存に失敗しました。もう一度お試しください。");
     }
   };
@@ -6677,7 +6709,7 @@ const MainApp = ({ onLock, user, onLogout, isPremium: mainIsPremium, onUserUpdat
       setLogs(updatedLogs);
       setSelectedLog(updatedLog);
     } catch (err) {
-      console.error("ログの更新エラー:", err);
+      logger.error("ログの更新エラー:", err);
       alert("ログの更新に失敗しました。もう一度お試しください。");
     }
   };
@@ -6930,15 +6962,15 @@ export default function RikoLogApp() {
     // セッションを確認
     const checkSession = async () => {
       try {
-        console.log("セッション確認を開始...");
+        logger.log("セッション確認を開始...");
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        console.log("Supabase URL:", supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : '未設定');
-        console.log("Supabase Key:", import.meta.env.VITE_SUPABASE_ANON_KEY ? '設定済み' : '未設定');
+        logger.log("Supabase URL:", supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : '未設定');
+        logger.log("Supabase Key:", import.meta.env.VITE_SUPABASE_ANON_KEY ? '設定済み' : '未設定');
         
         // まず直接fetchでSupabaseへの接続をテスト（5秒タイムアウト）
         if (supabaseUrl) {
           try {
-            console.log("Supabaseへの直接接続をテスト...");
+            logger.log("Supabaseへの直接接続をテスト...");
             const controller = new AbortController();
             const fetchTimeout = setTimeout(() => controller.abort(), 5000);
             const testResponse = await fetch(`${supabaseUrl}/rest/v1/`, {
@@ -6949,11 +6981,11 @@ export default function RikoLogApp() {
               signal: controller.signal
             });
             clearTimeout(fetchTimeout);
-            console.log("接続テスト結果:", testResponse.status, testResponse.ok ? 'OK' : 'エラー');
+            logger.log("接続テスト結果:", testResponse.status, testResponse.ok ? 'OK' : 'エラー');
           } catch (fetchError) {
-            console.error("接続テスト失敗:", fetchError.name, fetchError.message);
+            logger.error("接続テスト失敗:", fetchError.name, fetchError.message);
             if (fetchError.name === 'AbortError') {
-              console.error("→ 接続テストもタイムアウトしました。ネットワークまたはSupabaseへの接続に問題があります。");
+              logger.error("→ 接続テストもタイムアウトしました。ネットワークまたはSupabaseへの接続に問題があります。");
             }
           }
         }
@@ -6966,7 +6998,7 @@ export default function RikoLogApp() {
         });
 
         // セッション取得を実行
-        console.log("getSession()を実行...");
+        logger.log("getSession()を実行...");
         
         // まずlocalStorageから直接セッション情報を確認（タイムアウトを避けるため）
         let sessionFromStorage = null;
@@ -6979,18 +7011,18 @@ export default function RikoLogApp() {
               if (parsed && parsed.access_token && parsed.expires_at) {
                 const expiresAt = parsed.expires_at * 1000; // expires_atは秒単位
                 if (Date.now() < expiresAt) {
-                  console.log("localStorageから有効なセッションを発見");
+                  logger.log("localStorageから有効なセッションを発見");
                   sessionFromStorage = parsed;
                 } else {
-                  console.log("localStorageのセッションは期限切れ");
+                  logger.log("localStorageのセッションは期限切れ");
                 }
               }
             } catch (e) {
-              console.log("localStorageのセッション情報のパースに失敗:", e);
+              logger.log("localStorageのセッション情報のパースに失敗:", e);
             }
           }
         } catch (e) {
-          console.log("localStorageへのアクセスエラー:", e);
+          logger.log("localStorageへのアクセスエラー:", e);
         }
 
         // Supabaseクライアントでセッションを取得（タイムアウト付き）
@@ -7006,10 +7038,10 @@ export default function RikoLogApp() {
           ]);
         } catch (raceError) {
           clearTimeout(timeoutId);
-          console.error("Promise.raceエラー:", raceError);
+          logger.error("Promise.raceエラー:", raceError);
           // タイムアウトした場合でも、localStorageにセッションがあればそれを使う
           if (raceError.message && raceError.message.includes('タイムアウト')) {
-            console.error("タイムアウトが発生しました。localStorageのセッションを使用します。");
+            logger.error("タイムアウトが発生しました。localStorageのセッションを使用します。");
             if (sessionFromStorage) {
               result = { 
                 data: { session: { 
@@ -7035,8 +7067,8 @@ export default function RikoLogApp() {
         const { data: { session }, error: sessionError } = result || { data: { session: null }, error: null };
 
         if (sessionError) {
-          console.error("セッション取得エラー:", sessionError);
-          console.error("エラー詳細:", {
+          logger.error("セッション取得エラー:", sessionError);
+          logger.error("エラー詳細:", {
             message: sessionError.message,
             status: sessionError.status,
             code: sessionError.code,
@@ -7045,27 +7077,27 @@ export default function RikoLogApp() {
           return;
         }
         if (session?.user) {
-          console.log("セッションが見つかりました。ユーザープロフィールを取得中...");
+          logger.log("セッションが見つかりました。ユーザープロフィールを取得中...");
           try {
             const userProfile = await getCurrentUser();
             if (!isMounted) return;
             if (userProfile) {
               setCurrentUser({ ...userProfile, id: session.user.id });
-              console.log("ユーザープロフィールを設定しました");
+              logger.log("ユーザープロフィールを設定しました");
             } else {
-              console.log("ユーザープロフィールが見つかりませんでした");
+              logger.log("ユーザープロフィールが見つかりませんでした");
             }
           } catch (profileError) {
-            console.error("ユーザープロフィール取得エラー:", profileError);
+            logger.error("ユーザープロフィール取得エラー:", profileError);
           }
         } else {
-          console.log("セッションが見つかりませんでした");
+          logger.log("セッションが見つかりませんでした");
         }
       } catch (err) {
         clearTimeout(timeoutId);
         if (!isMounted) return;
-        console.error("セッション確認エラー:", err);
-        console.error("エラー詳細:", {
+        logger.error("セッション確認エラー:", err);
+        logger.error("エラー詳細:", {
           message: err.message,
           name: err.name,
           stack: err.stack,
@@ -7073,16 +7105,16 @@ export default function RikoLogApp() {
         
         // ネットワークエラーの場合の詳細情報
         if (err.message && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('タイムアウト'))) {
-          console.error("ネットワークエラーの可能性があります。以下を確認してください:");
-          console.error("1. インターネット接続が正常か");
-          console.error("2. Supabaseプロジェクトがアクティブか");
-          console.error("3. ブラウザのコンソールでCORSエラーが出ていないか");
+          logger.error("ネットワークエラーの可能性があります。以下を確認してください:");
+          logger.error("1. インターネット接続が正常か");
+          logger.error("2. Supabaseプロジェクトがアクティブか");
+          logger.error("3. ブラウザのコンソールでCORSエラーが出ていないか");
         }
         // エラーが発生しても電卓画面を表示し続けるため、エラーを設定しない
         // setError(err.message); // コメントアウト：エラーを表示しない
       } finally {
         if (isMounted) {
-          console.log("セッション確認完了。ローディングを終了します");
+          logger.log("セッション確認完了。ローディングを終了します");
           setIsLoading(false);
         }
       }
@@ -7112,19 +7144,19 @@ export default function RikoLogApp() {
 
   const handleLogin = async (user) => {
     try {
-      console.log("handleLogin呼び出し:", user ? "ユーザー情報あり" : "ユーザー情報なし");
+      logger.log("handleLogin呼び出し:", user ? "ユーザー情報あり" : "ユーザー情報なし");
       if (!user) {
-        console.error("ユーザー情報が正しく渡されていません");
+        logger.error("ユーザー情報が正しく渡されていません");
         return;
       }
-      console.log("setCurrentUserを呼び出します...", user.id);
+      logger.log("setCurrentUserを呼び出します...", user.id);
       // 状態を確実に更新するため、関数形式で更新
       setCurrentUser(prev => {
-        console.log("setCurrentUserコールバック実行:", user.id);
+        logger.log("setCurrentUserコールバック実行:", user.id);
         return user;
       });
       setError(null);
-      console.log("setCurrentUser呼び出し完了");
+      logger.log("setCurrentUser呼び出し完了");
       
       // プレミアム状態をデータベースから取得して更新
       try {
@@ -7146,15 +7178,15 @@ export default function RikoLogApp() {
           localStorage.removeItem('riko_premium');
         }
       } catch (premiumError) {
-        console.warn('プレミアム状態の取得エラー:', premiumError);
+        logger.warn('プレミアム状態の取得エラー:', premiumError);
       }
       
       // 状態更新を確実にするため、少し待ってから確認
       setTimeout(() => {
-        console.log("handleLogin完了後の確認");
+        logger.log("handleLogin完了後の確認");
       }, 100);
     } catch (error) {
-      console.error("ログイン処理でエラーが発生しました:", error);
+      logger.error("ログイン処理でエラーが発生しました:", error);
       setError("ログイン処理中にエラーが発生しました");
     }
   };
@@ -7164,7 +7196,7 @@ export default function RikoLogApp() {
       await supabase.auth.signOut();
       setCurrentUser(null);
     } catch (error) {
-      console.error("ログアウトエラー:", error);
+      logger.error("ログアウトエラー:", error);
     }
   };
 
@@ -7199,7 +7231,7 @@ export default function RikoLogApp() {
           localStorage.removeItem('riko_premium');
         }
       } catch (error) {
-        console.warn('プレミアム状態の取得エラー:', error);
+        logger.warn('プレミアム状態の取得エラー:', error);
         setIsPremium(false);
       }
     };
@@ -7265,7 +7297,7 @@ export default function RikoLogApp() {
       onUserUpdate={(updatedUser) => setCurrentUser(updatedUser)}
     />;
   } catch (error) {
-    console.error("アプリのレンダリングエラー:", error);
+    logger.error("アプリのレンダリングエラー:", error);
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 p-4">
         <div className="bg-white p-6 rounded-xl shadow-lg max-w-md lg:max-w-lg w-full text-center">
